@@ -1,0 +1,48 @@
+#include "static/op-codes.fc";
+#include "static/errors.fc";
+#include "static/logs.fc";
+#include "utils/messages.fc";
+
+
+(int) load_data() inline_ref {
+  slice data = get_data().begin_parse();
+  return (
+    data~load_uint(8));
+}
+
+() save_data(int version) impure inline_ref {
+  set_data(begin_cell()
+    .store_uint(version, 8)
+    .end_cell());
+}
+
+() recv_internal(int msg_value, cell in_msg_cell, slice in_msg_body) impure {
+  var cs = in_msg_cell.begin_parse();
+  var flags = cs~load_uint(4);
+  if (flags & 1) {
+    return ();
+  }
+
+  if(in_msg_body.slice_empty?()) {
+    return ();
+  };
+
+  int op = in_msg_body~load_uint(32);
+  int query_id = in_msg_body~load_uint(64);
+
+  throw_if(error::unknown_op, (op != op::wrap()));
+
+  if (op == op::wrap()) {
+    int eth_addr = in_msg_body~load_uint(160);
+    int amount = in_msg_body~load_coins();
+
+    throw_if(error::msg_value_too_small, (msg_value + 200000000 < amount));
+
+    cell log_body = begin_cell()
+      .store_uint(eth_addr, 160)
+      .store_coins(amount)
+      .end_cell();
+
+    emit_log_simple(log::wrap, log_body, query_id);
+  }
+}
