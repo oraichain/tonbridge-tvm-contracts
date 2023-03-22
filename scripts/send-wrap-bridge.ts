@@ -6,7 +6,7 @@ import { recoverWalletV3R2FromSeed } from '../src/contracts/utils';
 
 require('dotenv').config();
 
-const bridgeAddr = 'EQByhj9352A0VtdQLXagnMzRqofcaDeUTZSheMC55yLTNNdQ';
+const bridgeAddr = 'EQCfz4RUw-_AeFidWd5G5j1PRE8rII3Z-WwQVA9r4AMf0FGW';
 const ethAddr = ethers.Wallet.createRandom().address;
 const amount = toNano(1);
 

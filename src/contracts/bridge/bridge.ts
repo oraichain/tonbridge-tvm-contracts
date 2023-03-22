@@ -25,8 +25,8 @@ export class Bridge implements Contract {
   readonly address: Address;
   readonly init: { code: Cell; data: Cell };
 
-  constructor(workchain?: number, code?: Cell, data?: BridgeData, addr?: Address) {
-    if (workchain && code && data) {
+  constructor(workchain: number = 0, code?: Cell, data?: BridgeData, addr?: Address) {
+    if (code && data) {
       this.init = {
         code,
         data: beginCell().storeUint(data.version, 8).endCell(),
@@ -68,8 +68,8 @@ export class Bridge implements Contract {
       body: beginCell()
         .storeUint(BridgeOpCodes.WRAP, 32)
         .storeUint(0, 64)
-        .storeUint(BigInt(params.ethAddr), 160)
-        .storeCoins(params.amount)
+        .storeUint(BigInt(params.ethAddr), 256)
+        .storeUint(params.amount, 256)
         .endCell(),
     });
   }
