@@ -1,4 +1,3 @@
-import { ethers } from 'ethers';
 import { TonClient } from 'ton';
 import { Address, toNano } from 'ton-core';
 import { Bridge } from '../src/contracts/bridge/bridge';
@@ -7,8 +6,8 @@ import { recoverWalletV3R2FromSeed } from '../src/contracts/utils';
 require('dotenv').config();
 
 const bridgeAddr = 'EQCfz4RUw-_AeFidWd5G5j1PRE8rII3Z-WwQVA9r4AMf0FGW';
-const ethAddr = ethers.Wallet.createRandom().address;
-const amount = toNano(1);
+const ethAddr = '0x575f19B991D2f16fFff51c4478Cccfab8D2Dc078';
+const tonsToWrap = toNano(1);
 
 const main = async () => {
   const tonClient = new TonClient({
@@ -21,9 +20,9 @@ const main = async () => {
 
   await bridge.sendWrap(
     adminWallet.sender(tonClient.provider(adminWallet.address, adminWallet.init), adminWalletKeyPair.secretKey),
-    toNano('0.2') + amount,
+    toNano('0.2') + tonsToWrap,
     {
-      amount,
+      tonsToWrap,
       ethAddr,
     },
   );

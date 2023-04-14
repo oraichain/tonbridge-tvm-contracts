@@ -60,7 +60,7 @@ export class Bridge implements Contract {
     value: bigint,
     params: {
       ethAddr: string;
-      amount: bigint;
+      tonsToWrap: bigint;
     },
   ) {
     return await provider.internal(via, {
@@ -69,7 +69,7 @@ export class Bridge implements Contract {
         .storeUint(BridgeOpCodes.WRAP, 32)
         .storeUint(0, 64)
         .storeUint(BigInt(params.ethAddr), 256)
-        .storeUint(params.amount, 256)
+        .storeUint(params.tonsToWrap, 256)
         .endCell(),
     });
   }
