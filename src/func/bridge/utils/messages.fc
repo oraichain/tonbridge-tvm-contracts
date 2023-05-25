@@ -47,3 +47,4 @@ builder store_masterchain_address(builder b, int address_hash) inline {
 
   send_raw_message(msg.end_cell(), SEND_MODE_REGULAR);
 }
+
