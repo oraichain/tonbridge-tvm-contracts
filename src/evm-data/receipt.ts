@@ -1,9 +1,5 @@
-import {
-  BN,
-  keccak,
-  rlp,
-} from 'ethereumjs-util';
-// rlphash,
+import {BN, keccak, rlp} from 'ethereumjs-util';
+import {Cell, beginCell} from 'ton-core';
 
 
 const fixLength = (hex: string) => hex.length % 2 ? '0' + hex : hex
@@ -112,6 +108,16 @@ export class Receipt {
   private serialize() {
     // type TReceiptBinary = [Buffer, Buffer, Buffer, [Buffer, Buffer[], Buffer][]];
 
+    /*
+      EIP-658: Embedding transaction status code in receipts
+      https://eips.ethereum.org/EIPS/eip-658
+
+      For blocks where block.number >= BYZANTIUM_FORK_BLKNUM,
+      the intermediate state root is replaced by a status code,
+      0 indicating failure (due to any operation that can cause
+        the transaction or top-level call to revert) and
+      1 indicating success.
+    */
     const receiptBinary /* : TReceiptBinary */ = [
       uint(this.jsonData.status || this.jsonData.root),
       uint(this.jsonData.cumulativeGasUsed),
@@ -138,7 +144,56 @@ export class Receipt {
     return this.hash().toString('hex');
   }
 
-  public toCell() {
-    //
+  public toCell(): Cell {
+    const DATA_SLICE_LENGTH = 3 * 256 / 8;
+
+    const buildBufs = (buf: Buffer): Cell => {
+      const b = buf.subarray(0, DATA_SLICE_LENGTH);
+      const c = beginCell().storeBuffer(b);
+
+      if (buf.length > b.length) {
+        c.storeRef(buildBufs(buf.subarray(b.length + 1)));
+      }
+
+      return c.endCell();
+    };
+
+    const buildTopics = (tpcs: Buffer[]): Cell => {
+      const bldTopic = beginCell();
+      const tpc = tpcs.shift();
+      if (tpc) {
+        bldTopic.storeBuffer(tpc);
+      }
+      if (tpcs.length) {
+        bldTopic.storeRef(buildTopics(tpcs));
+      }
+      return bldTopic.endCell();
+    };
+
+    const buildLogs = (lgs: ILog[]): Cell | null => {
+      const lg = lgs.shift();
+      if (!lg) {
+        return null;
+      }
+
+      const bldLg = beginCell()
+        .storeBuffer(address(lg.address))
+        .storeRef(buildTopics(lg.topics.map(bytes32)))
+        .storeRef(buildBufs(bytes(lg.data)));
+
+      if (lgs.length) {
+        const c = buildLogs(lgs);
+        if (c) {
+          bldLg.storeRef(c);
+        }
+      }
+      return bldLg.endCell();
+    };
+
+    const res = buildLogs(this.jsonData.logs);
+    if (!res) {
+      throw new Error('Invalid input data');
+    }
+    return res;
   }
 }
