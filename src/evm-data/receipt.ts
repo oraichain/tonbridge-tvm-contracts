@@ -190,10 +190,15 @@ export class Receipt {
       return bldLg.endCell();
     };
 
-    const res = buildLogs(this.jsonData.logs);
-    if (!res) {
-      throw new Error('Invalid input data');
+    const cellLogs = buildLogs(this.jsonData.logs);
+
+    const res = beginCell()
+      .storeBuffer(uint(this.jsonData.status || this.jsonData.root))
+      .storeBuffer(uint(this.jsonData.cumulativeGasUsed))
+      .storeRef(buildBufs(bytes256(this.jsonData.logsBloom)));
+    if (cellLogs) {
+      res.storeRef(cellLogs);
     }
-    return res;
+    return res.endCell();
   }
 }

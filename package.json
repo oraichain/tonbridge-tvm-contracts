@@ -5,6 +5,7 @@
   "license": "MIT",
   "scripts": {
     "test": "clear && yarn jest",
+    "test:evm": "yarn jest src/evm-data/*.spec.ts",
     "script:deploy-bridge": "yarn ts-node scripts/deploy-bridge.ts",
     "script:send-wrap-bridge": "yarn ts-node scripts/send-wrap-bridge.ts"
   },
