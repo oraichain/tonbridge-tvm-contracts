@@ -63,4 +63,23 @@ export class Adapter implements Contract {
         .endCell(),
     });
   }
+
+  async sendReceipt(
+    provider: ContractProvider,
+    via: Sender,
+    addr: Address,
+    destAddr: Address,
+    value: bigint,
+    receipt: Cell,
+  ) {
+    return await provider.internal(via, {
+      value,
+      body: beginCell()
+        .storeBuffer(Buffer.from(destAddr.hash.toString('hex'), 'hex'), 32)
+        .storeUint(BigInt('0x00000000000000000000000000000000000000000000000000000000000186a0'), 256)
+        .storeAddress(addr)
+        .storeRef(receipt)
+        .endCell(),
+    });
+  }
 }

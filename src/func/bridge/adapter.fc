@@ -34,6 +34,45 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
     .end_cell());
 }
 
+() parse_receipt(cell receipt) impure {
+
+  ;; var cs = receipt.begin_parse();
+
+  ;; go to logs
+  ;; logs bloom
+  ;; cs~load_ref();
+
+
+
+  ;; cell log_cell = cs~load_ref();
+  ;; slice log_slice = log_cell.begin_parse();
+
+  ;; while(log_slice.slice_refs_empty?()!= -1) {
+  ;;   slice addr = log_slice~load_msg_addr();
+  ;;   ;; topics
+  ;;   cell topics_cell = log_slice~load_ref();
+  ;;   slice topics_slice = topics_cell.begin_parse();
+  ;;   ;; data
+  ;;   cell data_cell = log_slice~load_ref();
+
+  ;;   int topic_id = topics_slice~load_uint(256);
+  ;;   if(topic_id == 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef) {
+  ;;     slice data_slice = data_cell.begin_parse();
+  ;;     int num = data_slice~load_uint(256);
+  ;;     cell log_body = begin_cell()
+  ;;     ;; .store_uint(3, 2)
+  ;;     .store_uint(num, 256)
+  ;;     .store_uint(topic_id, 256)
+  ;;     .end_cell();
+  ;; emit_log_simple(log::wrap, log_body, 0);
+  ;;   }
+
+  ;;   log_cell = log_slice~load_ref();
+  ;;   log_slice = log_cell.begin_parse();
+  ;; }
+
+}
+
 () recv_internal(int msg_value, cell in_msg_cell, slice in_msg_body) impure {
   var cs = in_msg_cell.begin_parse();
 
@@ -49,7 +88,7 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
       .store_slice(addr)
       .end_cell();
 
-  emit_log_simple(log::wrap, log_body, 0);
+  ;; emit_log_simple(log::wrap, log_body, 0);
 
   cell mint = begin_cell()
         .store_uint(21, 32)
@@ -70,11 +109,80 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
   )
   .end_cell();
 
-  send_raw_message(begin_cell()
-  .store_uint(0x18, 6)
-  .store_slice(in_msg_body~load_msg_addr())
-  .store_coins(4 * gas_consumption())
-  .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-  .store_slice(mint.begin_parse())
-  .end_cell() , 64);
+  slice fu = in_msg_body~load_msg_addr();
+
+  ;; send_raw_message(begin_cell()
+  ;; .store_uint(0x18, 6)
+  ;; .store_slice(in_msg_body~load_msg_addr())
+  ;; .store_coins(4 * gas_consumption())
+  ;; .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+  ;; .store_slice(mint.begin_parse())
+  ;; .end_cell() , 64);
+
+  cell receipt = in_msg_body~load_ref();
+  ;; cell fff = begin_cell().store_ref(receipt).end_cell();
+
+  ;; throw(122);
+  ;; parse_receipt(receipt);
+
+  var cs2 = receipt.begin_parse();
+
+
+  ;; cs2~load_uint(256);
+  ;; cs2~load_uint(256);
+  ;; ;; go to logs
+  ;; ;; logs bloom
+  ;; cs2~load_ref();
+
+
+
+  ;; cell log_cell = cs2~load_ref();
+  ;; slice log_slice = log_cell.begin_parse();
+
+  ;; slice addr2 = log_slice~load_msg_addr();
+  ;; cell topics_cell = log_slice~load_ref();
+  ;; slice topics_slice = topics_cell.begin_parse();
+  ;; ;; data
+  ;; cell data_cell = log_slice~load_ref();
+
+  ;; int topic_id = topics_slice~load_uint(256);
+
+  ;; slice data_slice = data_cell.begin_parse();
+  ;; int num = data_slice~load_uint(256);
+  cell log_body2 = begin_cell()
+  ;; .store_slice(fu)
+  ;; .store_uint(cs2.slice_refs_empty?(), 256)
+  .store_slice(in_msg_body)
+  ;; .store_uint(num, 256)
+  ;; .store_uint(topic_id, 256)
+        .end_cell();
+
+  emit_log_simple(log::wrap, log_body2, 0);
+  ;; emit_log_simple(log::wrap, log_body, 0);
+
+
+
+  ;; while(log_slice.slice_refs_empty?()!= -1) {
+  ;;   slice addr = log_slice~load_msg_addr();
+  ;;   topics
+  ;;   cell topics_cell = log_slice~load_ref();
+  ;;   slice topics_slice = topics_cell.begin_parse();
+  ;;   ;; data
+  ;;   cell data_cell = log_slice~load_ref();
+
+  ;;   int topic_id = topics_slice~load_uint(256);
+  ;;   if(topic_id == 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef) {
+  ;;     slice data_slice = data_cell.begin_parse();
+  ;;     int num = data_slice~load_uint(256);
+  ;;     cell log_body = begin_cell()
+  ;;     ;; .store_uint(3, 2)
+  ;;     .store_uint(num, 256)
+  ;;     .store_uint(topic_id, 256)
+  ;;     .end_cell();
+  ;;     emit_log_simple(log::wrap, log_body, 0);
+  ;;   }
+
+  ;;   log_cell = log_slice~load_ref();
+  ;;   log_slice = log_cell.begin_parse();
+  ;; }
 }
