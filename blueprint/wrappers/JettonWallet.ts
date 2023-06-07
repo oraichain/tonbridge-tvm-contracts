@@ -1,14 +1,4 @@
-import {
-    Address,
-    beginCell,
-    Cell,
-    Contract,
-    contractAddress,
-    ContractProvider,
-    Dictionary,
-    Sender,
-    SendMode,
-} from 'ton-core';
+import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from 'ton-core';
 
 export type JettonWalletConfig = {
     ownerAddress: Address;
@@ -93,7 +83,7 @@ export class JettonWallet implements Contract {
                 .storeCoins(opts.jettonAmount)
                 .storeAddress(via.address)
                 .storeAddress(opts.adapter_addr)
-                .storeUint(opts.eth_addr, 160)
+                .storeUint(opts.eth_addr, 256)
                 .storeUint(0, 1)
                 .endCell(),
         });

@@ -56,7 +56,7 @@
         return ();
     }
     slice sender_address = cs~load_msg_addr();
-  
+
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
 
@@ -87,7 +87,7 @@
         cell response = in_msg_body~load_ref();
         slice response_slice = response.begin_parse();
         slice bridge_addr = response_slice~load_msg_addr();
-        int destination_address = response_slice~load_uint(160); ;; destination address in other network
+        int destination_address = response_slice~load_uint(256); ;; destination address in other network
         if (response_address.preload_uint(2) != 0) {
           var msg = begin_cell()
             .store_uint(0x10, 6) ;; nobounce - int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool src:MsgAddress -> 011000
@@ -97,7 +97,7 @@
             .store_uint(op::excesses(), 32)
             ;; .store_uint(op::burn_notification(), 32)
             .store_uint(query_id, 64)
-            .store_uint(destination_address, 160)
+            .store_uint(destination_address, 256)
             .store_coins(jetton_amount);
 
           send_raw_message(msg.end_cell(), 2 + 64);
