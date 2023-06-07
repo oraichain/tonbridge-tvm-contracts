@@ -1,5 +1,6 @@
 #include "static/logs.fc";
 #include "utils/messages.fc";
+#include "../jetton/op-codes.fc";
 
 int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
 

@@ -9,6 +9,8 @@ import { JettonMinter } from '../wrappers/JettonMinter';
 import { sha256 } from 'ton-crypto';
 import { JettonWallet } from '../wrappers/JettonWallet';
 
+const eth_addr = '0xC7296D50dDB12de4d2Cd8C889A73B98538624f61';
+
 describe('Adapter', () => {
     let code: Cell;
     let minterCode: Cell;
@@ -75,8 +77,6 @@ describe('Adapter', () => {
             deploy: true,
             success: true,
         });
-
-        
     });
 
     it('should deploy', async () => {
@@ -88,11 +88,7 @@ describe('Adapter', () => {
         const r = Receipt.fromJSON(jsonReceipt as unknown as IReceiptJSON);
         const cell = r.toCell();
         const userWalletAddr = await jettonMinter.getWalletAddress(user.address);
-        const jettonWallet = blockchain.openContract(
-            JettonWallet.createFromAddress(userWalletAddr)
-        );
-
-        console.log(await jettonWallet.getBalance())
+        const jettonWallet = blockchain.openContract(JettonWallet.createFromAddress(userWalletAddr));
 
         const sendReceiptResult = await adapter.sendReceipt(admin.getSender(), {
             addrStr: '0x' + user.address.hash.toString('hex'),
@@ -101,16 +97,12 @@ describe('Adapter', () => {
             jminterAddr: jettonMinter.address,
         });
 
-        console.log(await jettonWallet.getBalance())
-
         const sendReceiptResult2 = await adapter.sendReceipt(admin.getSender(), {
             addrStr: '0x' + user.address.hash.toString('hex'),
             value: toNano('1.05'),
             receipt: cell,
             jminterAddr: jettonMinter.address,
         });
-
-        console.log(await jettonWallet.getBalance())
 
         const userBalance = await jettonWallet.getBalance();
 
@@ -131,8 +123,6 @@ describe('Adapter', () => {
             to: jettonWallet.address,
             success: true,
         });
-        console.log(...sendReceiptResult2.transactions.filter(t => t.description.type === 'generic' && t.description.aborted)
-        .map(t => t.description))
 
         expect(sendReceiptResult2.transactions).toHaveTransaction({
             from: admin.address,
@@ -153,6 +143,77 @@ describe('Adapter', () => {
         });
 
         expect(userBalance.amount).toBeGreaterThan(1n);
+        console.log(userBalance.amount);
 
+        const burnRes = await jettonWallet.sendBurn(user.getSender(), {
+            value: toNano('100'),
+            jettonAmount: 2000n,
+            queryId: 0,
+            adapter_addr: adapter.address,
+            eth_addr:BigInt(eth_addr) 
+        });
+
+        const msgOfMsg = burnRes.transactions.map((tx) => tx.outMessages.values());
+        const parsed = msgOfMsg.map((msgs) =>
+            msgs.map((m) => {
+                return { ...m, body: parseMsgPart(m.body) };
+            })
+        );
+        console.log(parsed.flat(5));
+        console.log(
+            burnRes.transactions.filter((t) => t.description.type === 'generic' && t.description.aborted === true)
+            .map(t => t.description)
+        );
+        const addresses = {
+            adapter: adapter.address.toString(),
+            minter: jettonMinter.address.toString(),
+            userJWallet: jettonWallet.address.toString(),
+            user: user.address.toString()
+        }
+        console.log(addresses);
     });
+
+    // it('should burn tokens', async () => {
+    //     const userWalletAddr = await jettonMinter.getWalletAddress(user.address);
+    //     const jettonWallet = blockchain.openContract(JettonWallet.createFromAddress(userWalletAddr));
+
+    //     const r = Receipt.fromJSON(jsonReceipt as unknown as IReceiptJSON);
+    //     const cell = r.toCell();
+
+    //     const sendReceiptResult = await adapter.sendReceipt(admin.getSender(), {
+    //         addrStr: '0x' + user.address.hash.toString('hex'),
+    //         value: toNano('1.05'),
+    //         receipt: cell,
+    //         jminterAddr: jettonMinter.address,
+    //     });
+
+    //     console.log(await jettonWallet.getBalance())
+
+    //     const burnRes = await jettonWallet.sendBurn(user.getSender(), {
+    //         value: toNano('100'),
+    //         jettonAmount: 2000n,
+    //         queryId: 0,
+    //     });
+
+    //     const msgOfMsg = burnRes.transactions.map((tx) => tx.outMessages.values());
+    //     const parsed = msgOfMsg.map((msgs) =>
+    //         msgs.map((m) => {
+    //             return { ...m, body: parseMsgPart(m.body) };
+    //         })
+    //     );
+    //     console.log(parsed.flat(5));
+    //     console.log(
+    //         burnRes.transactions.filter((t) => t.description.type === 'generic' && t.description.aborted === true)
+    //         .map(t => t.description)
+    //     );
+    // });
 });
+
+function parseMsgPart(body: Cell) {
+    const cs = body.beginParse();
+    const op = cs.loadUint(32);
+    const query1 = cs.loadUint(32);
+    const query2 = cs.loadUint(32);
+    const rest = cs;
+    return { op: op.toString(16), query1: query1.toString(16), query2: query2.toString(16), cs: rest };
+}

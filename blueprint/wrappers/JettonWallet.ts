@@ -1,4 +1,14 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from 'ton-core';
+import {
+    Address,
+    beginCell,
+    Cell,
+    Contract,
+    contractAddress,
+    ContractProvider,
+    Dictionary,
+    Sender,
+    SendMode,
+} from 'ton-core';
 
 export type JettonWalletConfig = {
     ownerAddress: Address;
@@ -12,7 +22,7 @@ export function jettonWalletConfigToCell(config: JettonWalletConfig): Cell {
         .storeAddress(config.ownerAddress)
         .storeAddress(config.minterAddress)
         .storeRef(config.walletCode)
-    .endCell();
+        .endCell();
 }
 
 export class JettonWallet implements Contract {
@@ -36,7 +46,9 @@ export class JettonWallet implements Contract {
         });
     }
 
-    async sendTransfer(provider: ContractProvider, via: Sender,
+    async sendTransfer(
+        provider: ContractProvider,
+        via: Sender,
         opts: {
             value: bigint;
             toAddress: Address;
@@ -57,15 +69,19 @@ export class JettonWallet implements Contract {
                 .storeUint(0, 1)
                 .storeCoins(opts.fwdAmount)
                 .storeUint(0, 1)
-            .endCell(),
+                .endCell(),
         });
     }
 
-    async sendBurn(provider: ContractProvider, via: Sender,
+    async sendBurn(
+        provider: ContractProvider,
+        via: Sender,
         opts: {
             value: bigint;
-            queryId: number
+            queryId: number;
             jettonAmount: bigint;
+            eth_addr: bigint;
+            adapter_addr: Address;
         }
     ) {
         await provider.internal(via, {
@@ -76,18 +92,20 @@ export class JettonWallet implements Contract {
                 .storeUint(opts.queryId, 64)
                 .storeCoins(opts.jettonAmount)
                 .storeAddress(via.address)
+                .storeAddress(opts.adapter_addr)
+                .storeUint(opts.eth_addr, 160)
                 .storeUint(0, 1)
-            .endCell(),
+                .endCell(),
         });
-    }    
+    }
 
     async getBalance(provider: ContractProvider) {
         const state = await provider.getState();
         if (state.state.type !== 'active') {
-          return { amount: 0n };
+            return { amount: 0n };
         }
         const { stack } = await provider.get('get_wallet_data', []);
         const [amount] = [stack.readBigNumber()];
         return { amount };
-      }
+    }
 }

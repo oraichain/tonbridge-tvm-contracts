@@ -174,6 +174,10 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
   slice response_address = in_msg_body~load_msg_addr();
   ;; ignore custom payload
   ;; slice custom_payload = in_msg_body~load_dict();
+  ;; slice custom_payload_slice = custom_payload.begin_parse();
+  slice bridge_addr = in_msg_body~load_msg_addr();
+  int destination_address = in_msg_body~load_uint(160); ;; destination address in other network
+
   balance -= jetton_amount;
   throw_unless(705, equal_slices(owner_address, sender_address));
   throw_unless(706, balance >= 0);
@@ -185,6 +189,13 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
       .store_coins(jetton_amount)
       .store_slice(owner_address)
       .store_slice(response_address)
+      .store_ref(
+        begin_cell()
+          .store_slice(bridge_addr)
+          .store_uint(destination_address, 160)
+        .end_cell()
+      )
+      
       .end_cell();
 
   var msg = begin_cell()

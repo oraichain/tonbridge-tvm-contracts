@@ -83,15 +83,25 @@
         );
         save_data(total_supply - jetton_amount, admin_address, content, jetton_wallet_code);
         slice response_address = in_msg_body~load_msg_addr();
+
+        cell response = in_msg_body~load_ref();
+        slice response_slice = response.begin_parse();
+        slice bridge_addr = response_slice~load_msg_addr();
+        int destination_address = response_slice~load_uint(160); ;; destination address in other network
         if (response_address.preload_uint(2) != 0) {
           var msg = begin_cell()
             .store_uint(0x10, 6) ;; nobounce - int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool src:MsgAddress -> 011000
-            .store_slice(response_address)
-            .store_coins(0)
+            .store_slice(bridge_addr)
+            .store_coins(15000000)
             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_uint(op::excesses(), 32)
-            .store_uint(query_id, 64);
+            ;; .store_uint(op::burn_notification(), 32)
+            .store_uint(query_id, 64)
+            .store_uint(destination_address, 160)
+            .store_coins(jetton_amount);
+
           send_raw_message(msg.end_cell(), 2 + 64);
+          ;; send_raw_message(msg.end_cell(), 1);
         }
         return ();
     }
