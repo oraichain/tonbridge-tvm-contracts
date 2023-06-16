@@ -2,8 +2,8 @@ import {IReceiptJSON, Receipt} from './receipt';
 
 
 describe('Receipt test', () => {
+
   it('should create new instance from JSON', async () => {
-    // console.log('ok');
 
     const r = Receipt.fromJSON(jsonReceipt as unknown as IReceiptJSON);
     const cell = r.toCell();
@@ -11,6 +11,7 @@ describe('Receipt test', () => {
 
   });
 });
+
 
 const jsonReceipt = {
   "blockHash": "0xcbb4f043b23df01eadee5d5212c7ee594379d9cb80adb95fa112af3024246cee",
