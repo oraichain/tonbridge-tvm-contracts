@@ -1,68 +1,7 @@
-import {BN, keccak, rlp} from 'ethereumjs-util';
+import {keccak, rlp} from 'ethereumjs-util';
 import {Cell, beginCell} from 'ton-core';
 
-
-const fixLength = (hex: string) => hex.length % 2 ? '0' + hex : hex
-
-/**
- * converts any value as Buffer
- *  if len === 0 it will return an empty Buffer if the value is 0 or '0x00', since this is the way rlpencode works wit 0-values.
- */
-export function toBuffer(val: unknown, len = -1) {
-  // @ts-ignore
-  if (val && val._isBigNumber) val = val.toHexString()
-  if (typeof val == 'string')
-    val = val.startsWith('0x')
-      ? Buffer.from((val.length % 2 ? '0' : '') + val.substr(2), 'hex')
-      : val.length && (parseInt(val) || val == '0')
-        ? new BN(val).toArrayLike(Buffer)
-        : Buffer.from(val, 'utf8')
-  else if (typeof val == 'number')
-    val = val === 0 && len === 0 ? Buffer.allocUnsafe(0) : Buffer.from(fixLength(val.toString(16)), 'hex')
-  else if (BN.isBN(val))
-    val = val.toArrayLike(Buffer)
-
-  if (!val) val = Buffer.allocUnsafe(0)
-
-  // remove leading zeros
-  // @ts-ignore
-  while (len == 0 && val[0] === 0) val = val.slice(1)
-
-  // since rlp encodes an empty array for a 0 -value we create one if the required len===0
-  // @ts-ignore
-  if (len == 0 && val.length == 1 && val[0] === 0)
-    return Buffer.allocUnsafe(0)
-
-
-
-  // if we have a defined length, we should padLeft 00 or cut the left content to ensure length
-  if (len > 0 && Buffer.isBuffer(val) && val.length !== len)
-    return val.length < len
-      ? Buffer.concat([Buffer.alloc(len - val.length), val])
-      : val.slice(val.length - len)
-
-  return val as Buffer
-
-}
-
-/** converts it to a Buffer with 256 bytes length */
-// @ts-ignore
-export const bytes256 = val => toBuffer(val, 256)
-/** converts it to a Buffer with 32 bytes length */
-// @ts-ignore
-export const bytes32 = val => toBuffer(val, 32)
-/** converts it to a Buffer with 8 bytes length */
-// @ts-ignore
-export const bytes8 = val => toBuffer(val, 8)
-/** converts it to a Buffer  */
-// @ts-ignore
-export const bytes = val => toBuffer(val)
-/** converts it to a Buffer with 20 bytes length */
-// @ts-ignore
-export const address = val => toBuffer(val, 20)
-/** converts it to a Buffer with a variable length. 0 = length 0*/
-// @ts-ignore
-export const uint = val => toBuffer(val, 0)
+import {address, bytes, bytes256, bytes32, uint} from './utils';
 
 
 export interface ILog {
@@ -105,7 +44,7 @@ export class Receipt {
     //
   }
 
-  private serialize() {
+  public serialize() {
     // type TReceiptBinary = [Buffer, Buffer, Buffer, [Buffer, Buffer[], Buffer][]];
 
     /*
