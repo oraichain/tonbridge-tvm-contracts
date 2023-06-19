@@ -1,13 +1,13 @@
-import { Blockchain, SandboxContract, TreasuryContract } from '@ton-community/sandbox';
-import { Cell, Dictionary, beginCell, toNano } from 'ton-core';
-import { Adapter } from '../wrappers/Adapter';
-import '@ton-community/test-utils';
 import { compile } from '@ton-community/blueprint';
-import { IReceiptJSON, Receipt } from '../evm-data/receipt';
-import { jsonReceipt } from './mocks';
-import { JettonMinter } from '../wrappers/JettonMinter';
+import { Blockchain, SandboxContract, TreasuryContract } from '@ton-community/sandbox';
+import '@ton-community/test-utils';
+import { Cell, Dictionary, beginCell, toNano } from 'ton-core';
 import { sha256 } from 'ton-crypto';
+import { IReceiptJSON, Receipt } from '../evm-data/receipt';
+import { Adapter } from '../wrappers/Adapter';
+import { JettonMinter } from '../wrappers/JettonMinter';
 import { JettonWallet } from '../wrappers/JettonWallet';
+import { jsonReceipt } from './mocks';
 
 const eth_addr = '0xC7296D50dDB12de4d2Cd8C889A73B98538624f61';
 
@@ -90,6 +90,8 @@ describe('Adapter', () => {
         const userWalletAddr = await jettonMinter.getWalletAddress(user.address);
         const jettonWallet = blockchain.openContract(JettonWallet.createFromAddress(userWalletAddr));
 
+        console.log('HEEEX:', user.address.hash.toString('hex'));
+
         const sendReceiptResult = await adapter.sendReceipt(admin.getSender(), {
             addrStr: '0x' + user.address.hash.toString('hex'),
             value: toNano('1.05'),
@@ -150,10 +152,10 @@ describe('Adapter', () => {
             jettonAmount: 2000n,
             queryId: 0,
             adapter_addr: adapter.address,
-            eth_addr:BigInt(eth_addr) 
+            eth_addr: BigInt(eth_addr),
         });
 
-        const msgOfMsg = burnRes.transactions.map((tx) => tx.outMessages.values());
+        const msgOfMsg = sendReceiptResult2.transactions.map((tx) => tx.outMessages.values());
         const parsed = msgOfMsg.map((msgs) =>
             msgs.map((m) => {
                 return { ...m, body: parseMsgPart(m.body) };
@@ -161,15 +163,16 @@ describe('Adapter', () => {
         );
         console.log(parsed.flat(5));
         console.log(
-            burnRes.transactions.filter((t) => t.description.type === 'generic' && t.description.aborted === true)
-            .map(t => t.description)
+            burnRes.transactions
+                .filter((t) => t.description.type === 'generic' && t.description.aborted === true)
+                .map((t) => t.description)
         );
         const addresses = {
             adapter: adapter.address.toString(),
             minter: jettonMinter.address.toString(),
             userJWallet: jettonWallet.address.toString(),
-            user: user.address.toString()
-        }
+            user: user.address.toString(),
+        };
         console.log(addresses);
     });
 

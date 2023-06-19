@@ -1,9 +1,17 @@
 #include "imports/stdlib.fc";
 #include "utils/messages.fc";
 #include "imports/op-codes.fc";
+#include "static/logs.fc";
+
+;; slice push_c(slice c) asm "PUSHSLICE";
+;; int HASHEXT_KECCAK_N(int n) asm "HASHEXT_KECCAK256";
+;; int HASHEXT_KECCAK(slice c, int n) asm "HASHEXT_KECCAK256";
+
+;; slice push_c(slice c) asm "PUSHSLICE";
+;; int HASHEXT_KECCAK_4(slice, slice, slice, slice) asm " 4 PUSHINT HASHEXT_KECCAK256";
 
 const op::receipt = 0;
-const int log::wrap = 1;
+const op::receipt_withdraw = 1;
 const original_topic_id = 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925;
 
 int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
@@ -70,7 +78,6 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
     int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
     int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
 
-
     if (op == op::receipt) {
 
         int ton_addr = in_msg_body~load_uint(256);
@@ -78,8 +85,17 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
         cell receipt = in_msg_body~load_ref();
         var receipt_slice = receipt.begin_parse();
 
+        slice receipt_slice2 = receipt.begin_parse();
         ;; skip logs bloom
         receipt_slice~load_ref();
+        ;; cell t_data = begin_cell().store_uint(0x12345, 256).end_cell();
+        ;; slice d_slice = t_data.begin_parse();
+
+        ;; int res1 = HASHEXT_KECCAK(d_slice, 2);
+
+        ;; cell d_cell = begin_cell().store_uint(0x12345, 256).end_cell();
+        ;; slice d_slice = d_cell.begin_parse();
+        ;; int res2 = HASHEXT_KECCAK_4(d_slice, d_slice, d_slice, d_slice);
 
         cell log_cell = receipt_slice~load_ref();
         cell data_cell = parse_logs(log_cell);
@@ -89,7 +105,8 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
             .store_slice(jminter_address)
             .store_ref(begin_cell()
             .store_slice(address)
-
+            ;; .store_ref(begin_cell().store_uint(res2, 256).end_cell())
+            ;; .store_ref(t_data)
             .end_cell())
         ;; .store_uint(amount, 256)
         .end_cell();
@@ -135,8 +152,40 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
             .store_uint(amount, 256)
         .end_cell();
 
-        emit_log_simple(log::wrap, log_body, query_id);
+        emit_log_simple(log::burn, log_body, query_id);
         return ();
+    }
+
+
+    if (op::receipt_withdraw) {
+        int ton_addr = in_msg_body~load_uint(256);
+        slice jminter_address = in_msg_body~load_msg_addr();
+        cell receipt = in_msg_body~load_ref();
+        var receipt_slice = receipt.begin_parse();
+
+        slice receipt_slice2 = receipt.begin_parse();
+        ;; skip logs bloom
+        receipt_slice~load_ref();
+        ;; cell t_data = begin_cell().store_uint(0x12345, 256).end_cell();
+        ;; slice d_slice = t_data.begin_parse();
+
+        ;; int res1 = HASHEXT_KECCAK(d_slice, 2);
+
+        ;; cell d_cell = begin_cell().store_uint(0x12345, 256).end_cell();
+        ;; slice d_slice = d_cell.begin_parse();
+        ;; int res2 = HASHEXT_KECCAK_4(d_slice, d_slice, d_slice, d_slice);
+
+        cell log_cell = receipt_slice~load_ref();
+        cell data_cell = parse_logs(log_cell);
+        (int amount, slice address) = parse_receipt_data(data_cell, ton_addr);
+
+
+        send_raw_message(begin_cell()
+            .store_uint(0x10, 6)
+            .store_slice(address)
+            .store_coins(amount)
+            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .end_cell(), 64); ;;TODO: WHAT CODE BETTER HERE
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
