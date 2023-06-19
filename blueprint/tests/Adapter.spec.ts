@@ -90,7 +90,7 @@ describe('Adapter', () => {
         const userWalletAddr = await jettonMinter.getWalletAddress(user.address);
         const jettonWallet = blockchain.openContract(JettonWallet.createFromAddress(userWalletAddr));
 
-        console.log('HEEEX:', user.address.hash.toString('hex'));
+        // console.log('HEEEX:', user.address.hash.toString('hex'));
 
         const sendReceiptResult = await adapter.sendReceipt(admin.getSender(), {
             addrStr: '0x' + user.address.hash.toString('hex'),
@@ -145,7 +145,7 @@ describe('Adapter', () => {
         });
 
         expect(userBalance.amount).toBeGreaterThan(1n);
-        console.log(userBalance.amount);
+        // console.log(userBalance.amount);
 
         const burnRes = await jettonWallet.sendBurn(user.getSender(), {
             value: toNano('100'),
@@ -161,19 +161,19 @@ describe('Adapter', () => {
                 return { ...m, body: parseMsgPart(m.body) };
             })
         );
-        console.log(parsed.flat(5));
-        console.log(
-            burnRes.transactions
-                .filter((t) => t.description.type === 'generic' && t.description.aborted === true)
-                .map((t) => t.description)
-        );
+        // console.log(parsed.flat(5));
+        // console.log(
+        //     burnRes.transactions
+        //         .filter((t) => t.description.type === 'generic' && t.description.aborted === true)
+        //         .map((t) => t.description)
+        // );
         const addresses = {
             adapter: adapter.address.toString(),
             minter: jettonMinter.address.toString(),
             userJWallet: jettonWallet.address.toString(),
             user: user.address.toString(),
         };
-        console.log(addresses);
+        // console.log(addresses);
     });
 
     // it('should burn tokens', async () => {
