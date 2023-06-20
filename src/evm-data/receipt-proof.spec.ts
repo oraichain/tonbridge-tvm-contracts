@@ -13,10 +13,8 @@ describe('Receipt proof test', () => {
     const {receipt, receiptProof, blockHeader} = json;
     const r = Receipt.fromJSON(receipt as unknown as IReceiptJSON);
     const block = BlockHeader.fromHex(blockHeader);
-    // console.log("block.number:", new BN(block.number).toString(10));
-    // console.log("block.id:", new BN(block.).toString(10));
 
-    // verifiy the proof
+    // verifiy the proof (throw Error on false proof)
     const res = await verifyMerkleProof(
       block.receiptTrie, // expected merkle root
       rlp.encode(toNumber(receipt.transactionIndex)), // path, which is the transsactionIndex
