@@ -1,0 +1,2 @@
+;; public
+int op::wrap() asm "0xf0a28992 PUSHINT";

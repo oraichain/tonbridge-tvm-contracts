@@ -1,0 +1,6 @@
+;; global errors
+const int error::inbound_message_has_empty_body = 100;
+const int error::unknown_op = 101;
+
+;; bridge
+const int error::msg_value_too_small = 200;

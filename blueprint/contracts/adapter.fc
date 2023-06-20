@@ -1,0 +1,192 @@
+#include "imports/stdlib.fc";
+#include "utils/messages.fc";
+#include "imports/op-codes.fc";
+#include "static/logs.fc";
+
+;; slice push_c(slice c) asm "PUSHSLICE";
+;; int HASHEXT_KECCAK_N(int n) asm "HASHEXT_KECCAK256";
+;; int HASHEXT_KECCAK(slice c, int n) asm "HASHEXT_KECCAK256";
+
+;; slice push_c(slice c) asm "PUSHSLICE";
+;; int HASHEXT_KECCAK_4(slice, slice, slice, slice) asm " 4 PUSHINT HASHEXT_KECCAK256";
+
+const op::receipt = 0;
+const op::receipt_withdraw = 1;
+const original_topic_id = 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925;
+
+int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
+
+(slice) generate_account_address (int workchain_id, int addr) {
+    ;; addr_std$10 anycast:(Maybe Anycast) workchain_id:int8 address:bits256  = MsgAddressInt;
+
+    return begin_cell()
+        .store_uint(2, 2) ;; addr_std$10
+        .store_uint(0, 1) ;; anycast nothing
+        .store_int(workchain_id, 8) ;; workchain_id: -1
+        .store_uint(addr, 256) ;; .store_uint(cell_hash(state_init), 256)
+    .end_cell().begin_parse();
+}
+
+(slice) none_addr () {
+    ;; addr_std$10 anycast:(Maybe Anycast) workchain_id:int8 address:bits256  = MsgAddressInt;
+
+    return begin_cell()
+        .store_uint(0, 2) ;; addr_std$10
+    .end_cell().begin_parse();
+}
+
+(int, slice) parse_receipt_data(cell receipt_data, int ton_addr) impure {
+    slice cs = receipt_data.begin_parse();
+    return (
+        cs~load_uint(256), ;;token amount for mint
+        generate_account_address(0, ton_addr) ;; account address
+    );
+}
+
+(cell) parse_logs(cell log_cell) impure {
+    slice log_slice = log_cell.begin_parse();
+
+    slice topics_slice = log_slice~load_ref().begin_parse();
+    int topic_id = topics_slice~load_uint(256);
+
+    cell data_cell = log_slice~load_ref();
+
+    if(topic_id == original_topic_id) {
+        return (data_cell);
+    }
+
+    if(log_slice.slice_refs_empty?()!= -1) {
+        return parse_logs(log_slice~load_ref());
+    }
+
+    throw(0xffff);
+    return (begin_cell().end_cell());
+}
+
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) { ;; ignore all bounced messages
+        return ();
+    }
+
+    int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
+    int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+
+    if (op == op::receipt) {
+
+        int ton_addr = in_msg_body~load_uint(256);
+        slice jminter_address = in_msg_body~load_msg_addr();
+        cell receipt = in_msg_body~load_ref();
+        var receipt_slice = receipt.begin_parse();
+
+        slice receipt_slice2 = receipt.begin_parse();
+        ;; skip logs bloom
+        receipt_slice~load_ref();
+        ;; cell t_data = begin_cell().store_uint(0x12345, 256).end_cell();
+        ;; slice d_slice = t_data.begin_parse();
+
+        ;; int res1 = HASHEXT_KECCAK(d_slice, 2);
+
+        ;; cell d_cell = begin_cell().store_uint(0x12345, 256).end_cell();
+        ;; slice d_slice = d_cell.begin_parse();
+        ;; int res2 = HASHEXT_KECCAK_4(d_slice, d_slice, d_slice, d_slice);
+
+        cell log_cell = receipt_slice~load_ref();
+        cell data_cell = parse_logs(log_cell);
+        (int amount, slice address) = parse_receipt_data(data_cell, ton_addr);
+
+        cell log_body = begin_cell()
+            .store_slice(jminter_address)
+            .store_ref(begin_cell()
+            .store_slice(address)
+            ;; .store_ref(begin_cell().store_uint(res2, 256).end_cell())
+            ;; .store_ref(t_data)
+            .end_cell())
+        ;; .store_uint(amount, 256)
+        .end_cell();
+        emit_log_simple(log::wrap, log_body, 0);
+
+        cell mint = begin_cell()
+        .store_uint(21, 32)
+        .store_uint(0, 64)
+        .store_slice(address)
+        .store_coins(2 * gas_consumption())
+        .store_ref(
+            begin_cell()
+            .store_uint(0x178d4519, 32)
+            .store_uint(0, 64)
+            .store_coins(amount)
+            ;; TODO: use null addr
+            .store_slice(none_addr())
+            .store_slice(none_addr())
+            .store_coins(gas_consumption())
+            .store_uint(0, 1)
+          .end_cell()
+        )
+        .end_cell();
+
+        send_raw_message(begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(jminter_address)
+            .store_coins(3 * gas_consumption())
+            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .store_slice(mint.begin_parse())
+        .end_cell(), 1); ;;TODO: WHAT CODE BETTER HERE
+
+        return ();
+    }
+
+    if (op == op::excesses()) {
+        int eth_addr = in_msg_body~load_uint(256);
+        int amount = in_msg_body~load_coins();
+        cell log_body = begin_cell()
+        ;; .store_uint(0x11, 32)
+        ;; .store_uint(query_id, 64)
+            .store_uint(eth_addr, 256)
+            .store_uint(amount, 256)
+        .end_cell();
+
+        emit_log_simple(log::burn, log_body, query_id);
+        return ();
+    }
+
+
+    if (op::receipt_withdraw) {
+        int ton_addr = in_msg_body~load_uint(256);
+        slice jminter_address = in_msg_body~load_msg_addr();
+        cell receipt = in_msg_body~load_ref();
+        var receipt_slice = receipt.begin_parse();
+
+        slice receipt_slice2 = receipt.begin_parse();
+        ;; skip logs bloom
+        receipt_slice~load_ref();
+        ;; cell t_data = begin_cell().store_uint(0x12345, 256).end_cell();
+        ;; slice d_slice = t_data.begin_parse();
+
+        ;; int res1 = HASHEXT_KECCAK(d_slice, 2);
+
+        ;; cell d_cell = begin_cell().store_uint(0x12345, 256).end_cell();
+        ;; slice d_slice = d_cell.begin_parse();
+        ;; int res2 = HASHEXT_KECCAK_4(d_slice, d_slice, d_slice, d_slice);
+
+        cell log_cell = receipt_slice~load_ref();
+        cell data_cell = parse_logs(log_cell);
+        (int amount, slice address) = parse_receipt_data(data_cell, ton_addr);
+
+
+        send_raw_message(begin_cell()
+            .store_uint(0x10, 6)
+            .store_slice(address)
+            .store_coins(amount)
+            .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .end_cell(), 0); ;;TODO: WHAT CODE BETTER HERE
+    }
+
+    throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
+}
