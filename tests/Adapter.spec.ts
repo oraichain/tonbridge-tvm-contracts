@@ -1,6 +1,7 @@
 import { compile } from '@ton-community/blueprint';
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton-community/sandbox';
 import '@ton-community/test-utils';
+import { ethers } from 'ethers';
 import { Cell, Dictionary, beginCell, toNano } from 'ton-core';
 import { sha256 } from 'ton-crypto';
 import { IReceiptJSON, Receipt } from '../evm-data/receipt';
@@ -8,8 +9,13 @@ import { Adapter } from '../wrappers/Adapter';
 import { JettonMinter } from '../wrappers/JettonMinter';
 import { JettonWallet } from '../wrappers/JettonWallet';
 import { jsonReceipt } from './mocks';
+import { expectFail, expectSuccess } from './utils';
 
 const eth_addr = '0xC7296D50dDB12de4d2Cd8C889A73B98538624f61';
+
+export enum BridgeErrors {
+    MSG_VALUE_TOO_SMALL = 200,
+}
 
 describe('Adapter', () => {
     let code: Cell;
@@ -27,6 +33,8 @@ describe('Adapter', () => {
     let admin: SandboxContract<TreasuryContract>;
     let user: SandboxContract<TreasuryContract>;
     let jettonMinter: SandboxContract<JettonMinter>;
+
+    const ethAddr = ethers.Wallet.createRandom().address;
 
     beforeEach(async () => {
         blockchain = await Blockchain.create();
@@ -210,6 +218,31 @@ describe('Adapter', () => {
     //         .map(t => t.description)
     //     );
     // });
+
+    it('should throw MSG_VALUE_TOO_SMALL if msg.value less that amount + 0.2 TON', async () => {
+        const amount = toNano('1');
+        const wrapResult = await adapter.sendWrap(admin.getSender(), toNano('0.1'), {
+            amount,
+            ethAddr,
+        });
+
+        expectFail(
+            wrapResult.transactions,
+            admin.getSender().address,
+            adapter.address,
+            BridgeErrors.MSG_VALUE_TOO_SMALL
+        );
+    });
+
+    it('should emit log after receive wrap op', async () => {
+        const amount = toNano('1');
+        const wrapResult = await adapter.sendWrap(admin.getSender(), toNano('0.2') + amount, {
+            amount,
+            ethAddr,
+        });
+
+        expectSuccess(wrapResult.transactions, admin.getSender().address, adapter.address);
+    });
 });
 
 function parseMsgPart(body: Cell) {

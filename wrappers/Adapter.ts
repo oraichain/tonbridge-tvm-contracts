@@ -2,6 +2,10 @@ import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, 
 
 export type AdapterConfig = {};
 
+export enum BridgeOpCodes {
+    WRAP = 0xf0a28992,
+}
+
 export function adapterConfigToCell(config: AdapterConfig): Cell {
     return beginCell().endCell();
 }
@@ -47,6 +51,26 @@ export class Adapter implements Contract {
                 .storeUint(BigInt(opts.addrStr), 256)
                 .storeAddress(opts.jminterAddr)
                 .storeRef(opts.receipt)
+                .endCell(),
+        });
+    }
+
+    async sendWrap(
+        provider: ContractProvider,
+        via: Sender,
+        value: bigint,
+        params: {
+            ethAddr: string;
+            amount: bigint;
+        }
+    ) {
+        return await provider.internal(via, {
+            value,
+            body: beginCell()
+                .storeUint(BridgeOpCodes.WRAP, 32)
+                .storeUint(0, 64)
+                .storeUint(BigInt(params.ethAddr), 256)
+                .storeUint(params.amount, 256)
                 .endCell(),
         });
     }

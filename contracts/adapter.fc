@@ -2,13 +2,8 @@
 #include "utils/messages.fc";
 #include "imports/op-codes.fc";
 #include "static/logs.fc";
-
-;; slice push_c(slice c) asm "PUSHSLICE";
-;; int HASHEXT_KECCAK_N(int n) asm "HASHEXT_KECCAK256";
-;; int HASHEXT_KECCAK(slice c, int n) asm "HASHEXT_KECCAK256";
-
-;; slice push_c(slice c) asm "PUSHSLICE";
-;; int HASHEXT_KECCAK_4(slice, slice, slice, slice) asm " 4 PUSHINT HASHEXT_KECCAK256";
+#include "static/errors.fc";
+#include "static/op-codes.fc";
 
 const op::receipt = 0;
 const op::receipt_withdraw = 1;
@@ -77,6 +72,21 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
 
     int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
     int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+
+    if (op == op::wrap()) {
+        int eth_addr = in_msg_body~load_uint(256);
+        int amount = in_msg_body~load_uint(256);
+
+        throw_if(error::msg_value_too_small, (msg_value + 200000000 < amount));
+
+        cell log_body = begin_cell()
+      .store_uint(eth_addr, 256)
+      .store_uint(amount, 256)
+      .end_cell();
+
+        emit_log_simple(log::wrap, log_body, query_id);
+        return ();
+    }
 
     if (op == op::receipt) {
 
@@ -186,6 +196,8 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
             .store_coins(amount)
             .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .end_cell(), 0); ;;TODO: WHAT CODE BETTER HERE
+
+        return ();
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw

@@ -1,1 +1,0 @@
-int equal_slices (slice a, slice b) asm "SDEQ";
