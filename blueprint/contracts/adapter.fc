@@ -184,8 +184,8 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
             .store_uint(0x10, 6)
             .store_slice(address)
             .store_coins(amount)
-            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .end_cell(), 64); ;;TODO: WHAT CODE BETTER HERE
+            .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .end_cell(), 0); ;;TODO: WHAT CODE BETTER HERE
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
