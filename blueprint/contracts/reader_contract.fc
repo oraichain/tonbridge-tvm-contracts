@@ -5,6 +5,7 @@
 tuple init_hash () asm "NIL";
 tuple update(tuple t, slice s) asm "TPUSH";
 int digest_keccak(tuple t) asm " DUP TLEN EXPLODEVAR HASHEXT_KECCAK256";
+int HASHEXT_KECCAK(slice) asm " 1 PUSHINT HASHEXT_KECCAK256";
 
 const op::increase = "op::increase"c; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case
 
@@ -55,17 +56,29 @@ global int ctx_counter;
     cell receipt = in_msg_body~load_ref();
 
     slice tmp_slice = receipt.begin_parse();
-    var res = init_hash().update(tmp_slice);
-    cell tmp_cell = tmp_slice~load_ref();
-    tmp_slice = tmp_cell.begin_parse();
-    res = res.update(tmp_slice);
+    slice some_cell = tmp_slice~load_ref().begin_parse();
+    slice p1 = some_cell~load_ref().begin_parse();
+    slice p2 = p1~load_ref().begin_parse();
 
-    int hash = res.digest_keccak();
+    cell wtf = begin_cell().store_uint(12345, 16).end_cell();
+    slice wwtf = wtf.begin_parse();
+    ;; var res = init_hash().update(some_cell).update(p1).update(p2);
+    ;; res = init_hash().update(wwtf);
+    ;; cell tmp_cell = tmp_slice~load_ref();
+    ;; tmp_slice = tmp_cell.begin_parse();
+    ;; res = res.update(tmp_slice);
+
+    ;; int hash = res.digest_keccak();
     ;; .digest_keccak();
+    int hash = HASHEXT_KECCAK(wwtf);
 
     cell log_body = begin_cell()
         .store_uint(hash, 256)
-
+        .store_ref(begin_cell().store_slice(wwtf).end_cell())
+    ;; .store_slice(wwtf)
+    ;; .store_ref(begin_cell().store_slice(some_cell).end_cell())
+    ;; .store_ref(begin_cell().store_slice(p1).end_cell())
+    ;; .store_ref(begin_cell().store_slice(p2).end_cell())
 
         .end_cell();
 
