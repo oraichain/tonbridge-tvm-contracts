@@ -54,27 +54,46 @@ global int ctx_counter;
     int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
 
     cell receipt = in_msg_body~load_ref();
+    slice receipt_slice = receipt.begin_parse();
+    cell logs_bloom = receipt_slice~load_ref();
+    slice logs_bloom1 = logs_bloom.begin_parse();
 
-    slice tmp_slice = receipt.begin_parse();
-    slice some_cell = tmp_slice~load_ref().begin_parse();
-    slice p1 = some_cell~load_ref().begin_parse();
-    slice p2 = p1~load_ref().begin_parse();
 
-    cell wtf = begin_cell().store_uint(12345, 16).end_cell();
-    slice wwtf = wtf.begin_parse();
+    cell logs_bloom_1 = logs_bloom1~load_ref();
+    slice logs_bloom2 = logs_bloom_1.begin_parse();
+
+    cell logs_bloom_2 = logs_bloom2~load_ref();
+    slice logs_bloom3 = logs_bloom_2.begin_parse();
+
+    ;; slice first_bug =
+
+    ;; slice tmp_slice = receipt.begin_parse();
+    ;; slice some_cell = tmp_slice~load_ref().begin_parse();
+    ;; slice p1 = some_cell~load_ref().begin_parse();
+    ;; slice p2 = p1~load_ref().begin_parse();
+
+    ;; cell wtf = begin_cell().store_uint(12345, 16).end_cell();
+    ;; slice wwtf = wtf.begin_parse();
     ;; var res = init_hash().update(some_cell).update(p1).update(p2);
     ;; res = init_hash().update(wwtf);
     ;; cell tmp_cell = tmp_slice~load_ref();
     ;; tmp_slice = tmp_cell.begin_parse();
     ;; res = res.update(tmp_slice);
 
+    int hash = init_hash()
+    .update(receipt_slice)
+    .update(logs_bloom1)
+    .update(logs_bloom2)
+    .update(logs_bloom3)
+    .digest_keccak();
     ;; int hash = res.digest_keccak();
     ;; .digest_keccak();
-    int hash = HASHEXT_KECCAK(wwtf);
+    ;; int hash = HASHEXT_KECCAK(wwtf);
+
 
     cell log_body = begin_cell()
         .store_uint(hash, 256)
-        .store_ref(begin_cell().store_slice(wwtf).end_cell())
+        ;; .store_ref(receipt)
     ;; .store_slice(wwtf)
     ;; .store_ref(begin_cell().store_slice(some_cell).end_cell())
     ;; .store_ref(begin_cell().store_slice(p1).end_cell())

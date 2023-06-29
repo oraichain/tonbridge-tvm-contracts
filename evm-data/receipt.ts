@@ -44,6 +44,11 @@ export class Receipt {
     //
   }
 
+  public static testSerialize(r: Buffer[]) {
+    const data = Buffer.concat(r);
+    return keccak(data);
+  }
+
   public serialize() {
     // type TReceiptBinary = [Buffer, Buffer, Buffer, [Buffer, Buffer[], Buffer][]];
 
