@@ -4,6 +4,7 @@
     "license": "MIT",
     "scripts": {
         "test": "jest",
+        "test:adapter": "jest tests/Adapter.spec.ts",
         "test:bp": "npx blueprint test",
         "build": "npx blueprint build",
         "run": "npx blueprint run",
