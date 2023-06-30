@@ -1,10 +1,10 @@
-import { compile } from '@ton-community/blueprint';
-import { Blockchain, SandboxContract } from '@ton-community/sandbox';
+import {compile} from '@ton-community/blueprint';
+import {Blockchain, SandboxContract} from '@ton-community/sandbox';
 import '@ton-community/test-utils';
-import { Cell, toNano } from 'ton-core';
-import { IReceiptJSON, Receipt } from '../evm-data/receipt';
-import { ReaderContract } from '../wrappers/ReaderContract';
-import { jsonReceipt } from './mocks';
+import {Cell, toNano} from 'ton-core';
+import {IReceiptJSON, Receipt} from '../evm-data/receipt';
+import {ReaderContract} from '../wrappers/ReaderContract';
+import {jsonReceipt} from './mocks';
 
 describe('ReaderContract', () => {
     let code: Cell;
@@ -58,7 +58,13 @@ describe('ReaderContract', () => {
             receipt: cell,
         });
 
-        console.log(increaseResult.externals);
+        console.log(increaseResult.externals[0].body);
+        const receiptCell = r.toCell();
+        // console.log('data to serialize:');
+        const parseData = getDataForHash(receiptCell);
+        console.log(parseData.map(c => c.toString('hex')));
+        // console.log('hash:');
+        console.log(Receipt.testSerialize(parseData).toString('hex').toUpperCase());
 
         expect(increaseResult.transactions).toHaveTransaction({
             from: increaser.address,
@@ -67,3 +73,22 @@ describe('ReaderContract', () => {
         });
     });
 });
+
+function getDataForHash(receiptCell: Cell) {
+    const start = receiptCell.beginParse();
+    const baseData = start.loadBuffer(4);
+    let logsBloomRef = start.loadRef().beginParse();
+    const logsBloom1 = logsBloomRef.loadBuffer(32 * 3);
+    logsBloomRef = logsBloomRef.loadRef().beginParse();
+    const logsBloom2 = logsBloomRef.loadBuffer(32 * 3);
+    logsBloomRef = logsBloomRef.loadRef().beginParse();
+
+    const logsBloom3 = logsBloomRef.loadBuffer(logsBloomRef.remainingBits / 8);
+
+    return [
+        baseData,
+        logsBloom1,
+        logsBloom2,
+        logsBloom3
+    ]
+}
