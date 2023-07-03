@@ -5,7 +5,7 @@
 tuple init_hash () asm "NIL";
 tuple update(tuple t, slice s) asm "TPUSH";
 int digest_keccak(tuple t) asm " DUP TLEN EXPLODEVAR HASHEXT_KECCAK256";
-int HASHEXT_KECCAK(slice) asm " 1 PUSHINT HASHEXT_KECCAK256";
+int HASHEXT_KECCAK(slice, slice) asm " 2 PUSHINT HASHEXT_KECCAK256";
 
 const op::increase = "op::increase"c; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case
 
@@ -15,6 +15,89 @@ const op::increase = "op::increase"c; ;; create an opcode from string using the 
 ;; since addresses in TON depend on the initial state of the contract
 global int ctx_id;
 global int ctx_counter;
+
+(int) rlp_bloom_size(cell bloom, int len) impure {
+    slice cs = bloom.begin_parse();
+    if (cs.slice_refs_empty?()) {
+        return len + cs.slice_bits();
+    }
+
+    return rlp_bloom_size(cs~load_ref(), len + cs.slice_bits());
+}
+
+(tuple) rlp_bloom(cell bloom, tuple hash) impure {
+    slice cs = bloom.begin_parse();
+    if (cs.slice_refs_empty?()) {
+        return hash.update(cs);
+    }
+
+    return rlp_bloom(cs~load_ref(), hash.update(cs));
+}
+
+(int) number_length(int number) impure {
+    int l = 0;
+    while(number) {
+        l += 1;
+        number >>= 3;
+    }
+    return l;
+}
+
+(int) encode_length(int len, int offset) impure {
+    if (len < 56) {
+        return len + offset;
+    }
+    else {
+        int l_length = ((number_length(len) + 1) / 2);
+        return ((offset + 55 + l_length) << (l_length * 8)) + len;
+    }
+}
+
+(tuple) rlp_receipt(slice receipt_slice) impure {
+    tuple hash = init_hash();
+    int total_size = 0;
+
+    cell logs_bloom = receipt_slice~load_ref();
+    int logs_bloom_size = rlp_bloom_size(logs_bloom, 0) / 8;
+    int logs_bloom_size_encoded = encode_length(logs_bloom_size, 128);
+
+    slice logs_bloom_size_slice = begin_cell()
+        .store_uint(logs_bloom_size_encoded, number_length(logs_bloom_size_encoded) * 3)
+        .end_cell()
+        .begin_parse();
+
+    total_size += logs_bloom_size + (logs_bloom_size_slice.slice_bits() / 8);
+    int total_size_encoded = encode_length(total_size, 192);
+    slice total_size_encoded_slice = begin_cell()
+        .store_uint(total_size_encoded, number_length(total_size_encoded) * 3)
+        .end_cell()
+        .begin_parse();
+
+
+    hash = hash.update(
+        total_size_encoded_slice
+    );
+
+    hash = hash.update(
+        logs_bloom_size_slice
+    );
+
+    hash = rlp_bloom(logs_bloom, hash);
+
+
+
+    cell log_body = begin_cell()
+        .store_uint(hash.digest_keccak(), 256)
+        .store_ref(begin_cell().store_slice(total_size_encoded_slice).end_cell())
+        .store_ref(begin_cell().store_slice(logs_bloom_size_slice).end_cell())
+        .store_ref(logs_bloom)
+
+        .end_cell();
+
+    emit_log_simple(log::wrap, log_body, 0);
+
+    return hash;
+}
 
 ;; load_data populates storage variables using stored data
 () load_data() impure {
@@ -55,50 +138,10 @@ global int ctx_counter;
 
     cell receipt = in_msg_body~load_ref();
     slice receipt_slice = receipt.begin_parse();
-    cell logs_bloom = receipt_slice~load_ref();
-    slice logs_bloom1 = logs_bloom.begin_parse();
-
-
-    cell logs_bloom_1 = logs_bloom1~load_ref();
-    slice logs_bloom2 = logs_bloom_1.begin_parse();
-
-    cell logs_bloom_2 = logs_bloom2~load_ref();
-    slice logs_bloom3 = logs_bloom_2.begin_parse();
-
-    ;; slice first_bug =
-
-    ;; slice tmp_slice = receipt.begin_parse();
-    ;; slice some_cell = tmp_slice~load_ref().begin_parse();
-    ;; slice p1 = some_cell~load_ref().begin_parse();
-    ;; slice p2 = p1~load_ref().begin_parse();
-
-    ;; cell wtf = begin_cell().store_uint(12345, 16).end_cell();
-    ;; slice wwtf = wtf.begin_parse();
-    ;; var res = init_hash().update(some_cell).update(p1).update(p2);
-    ;; res = init_hash().update(wwtf);
-    ;; cell tmp_cell = tmp_slice~load_ref();
-    ;; tmp_slice = tmp_cell.begin_parse();
-    ;; res = res.update(tmp_slice);
-
-    int hash = init_hash()
-    .update(receipt_slice)
-    .update(logs_bloom1)
-    .update(logs_bloom2)
-    .update(logs_bloom3)
-    .digest_keccak();
-    ;; int hash = res.digest_keccak();
-    ;; .digest_keccak();
-    ;; int hash = HASHEXT_KECCAK(wwtf);
-
+    tuple hash_tuple = rlp_receipt(receipt_slice);
 
     cell log_body = begin_cell()
-        .store_uint(hash, 256)
-        ;; .store_ref(receipt)
-    ;; .store_slice(wwtf)
-    ;; .store_ref(begin_cell().store_slice(some_cell).end_cell())
-    ;; .store_ref(begin_cell().store_slice(p1).end_cell())
-    ;; .store_ref(begin_cell().store_slice(p2).end_cell())
-
+        .store_uint(hash_tuple.digest_keccak(), 256)
         .end_cell();
 
     emit_log_simple(log::wrap, log_body, 0);
