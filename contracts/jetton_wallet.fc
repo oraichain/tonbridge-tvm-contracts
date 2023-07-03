@@ -12,11 +12,6 @@ This is suitable for most tokens, if you need tokens transferable between workch
 
 -}
 
-#include "imports/stdlib.fc";
-#include "imports/op-codes.fc";
-#include "imports/params.fc";
-#include "imports/jetton-utils.fc";
-
 int min_tons_for_storage() asm "10000000 PUSHINT"; ;; 0.01 TON
 ;; Note that 2 * gas_consumptions is expected to be able to cover fees on both wallets (sender and receiver)
 ;; and also constant fees on inter-wallet interaction, in particular fwd fee on state_init transfer
@@ -90,13 +85,13 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
   int fwd_count = forward_ton_amount ? 2 : 1;
   throw_unless(709, msg_value >
                      forward_ton_amount +
-    ;; 3 messages: wal1->wal2,  wal2->owner, wal2->response
-    ;; but last one is optional (it is ok if it fails)
+                     ;; 3 messages: wal1->wal2,  wal2->owner, wal2->response
+                     ;; but last one is optional (it is ok if it fails)
                      fwd_count * fwd_fee +
-    (2 * gas_consumption() + min_tons_for_storage()));
-  ;; universal message send fee calculation may be activated here
-  ;; by using this instead of fwd_fee
-  ;; msg_fwd_fee(to_wallet, msg_body, state_init, 15)
+                     (2 * gas_consumption() + min_tons_for_storage()));
+                     ;; universal message send fee calculation may be activated here
+                     ;; by using this instead of fwd_fee
+                     ;; msg_fwd_fee(to_wallet, msg_body, state_init, 15)
 
   send_raw_message(msg.end_cell(), 64); ;; revert on errors
   save_data(balance, owner_address, jetton_master_address, jetton_wallet_code);
@@ -120,7 +115,7 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
   slice from_address = in_msg_body~load_msg_addr();
   slice response_address = in_msg_body~load_msg_addr();
   throw_unless(707,
-    equal_slices(jetton_master_address, sender_address)
+      equal_slices(jetton_master_address, sender_address)
       |
       equal_slices(calculate_user_jetton_wallet_address(from_address, jetton_master_address, jetton_wallet_code), sender_address)
   );
@@ -174,10 +169,6 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
   slice response_address = in_msg_body~load_msg_addr();
   ;; ignore custom payload
   ;; slice custom_payload = in_msg_body~load_dict();
-  ;; slice custom_payload_slice = custom_payload.begin_parse();
-  slice bridge_addr = in_msg_body~load_msg_addr();
-  int destination_address = in_msg_body~load_uint(256); ;; destination address in other network
-
   balance -= jetton_amount;
   throw_unless(705, equal_slices(owner_address, sender_address));
   throw_unless(706, balance >= 0);
@@ -189,13 +180,6 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
       .store_coins(jetton_amount)
       .store_slice(owner_address)
       .store_slice(response_address)
-      .store_ref(
-    begin_cell()
-          .store_slice(bridge_addr)
-          .store_uint(destination_address, 256)
-        .end_cell()
-  )
-
       .end_cell();
 
   var msg = begin_cell()
@@ -256,7 +240,7 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
     return ();
   }
 
-  throw(0xffffff);
+  throw(0xffff);
 }
 
 (int, slice, slice, cell) get_wallet_data() method_id {
