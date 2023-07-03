@@ -92,8 +92,8 @@ function getDataForHash(jsonReceipt: IReceiptJSON) {
     // const logsBloom3 = logsBloomRef.loadBuffer(logsBloomRef.remainingBits / 8);
 
     const receiptBinary /* : TReceiptBinary */ = [
-        // uint(jsonReceipt.status || jsonReceipt.root),
-        // uint(jsonReceipt.cumulativeGasUsed),
+        uint(jsonReceipt.status || jsonReceipt.root),
+        uint(jsonReceipt.cumulativeGasUsed),
         bytes256(jsonReceipt.logsBloom),
         // jsonReceipt.logs.map(l => [
         //   address(l.address),

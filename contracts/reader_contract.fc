@@ -57,6 +57,22 @@ global int ctx_counter;
     tuple hash = init_hash();
     int total_size = 0;
 
+    int cumulative_gas_used_size = receipt_slice.slice_bits() / 8 - 1;
+    slice status_slice = begin_cell()
+        .store_uint(receipt_slice~load_uint(8), 8)
+        .end_cell()
+        .begin_parse();
+
+    slice cumulative_gas_used_size_slice = begin_cell()
+        .store_uint(encode_length(cumulative_gas_used_size, 128), number_length(cumulative_gas_used_size) * 8)
+        .end_cell()
+        .begin_parse();
+
+    slice cumulative_gas_used_slice = begin_cell()
+        .store_uint(receipt_slice~load_uint(cumulative_gas_used_size * 8), cumulative_gas_used_size * 8)
+        .end_cell()
+        .begin_parse();
+
     cell logs_bloom = receipt_slice~load_ref();
     int logs_bloom_size = rlp_bloom_size(logs_bloom, 0) / 8;
     int logs_bloom_size_encoded = encode_length(logs_bloom_size, 128);
@@ -66,6 +82,7 @@ global int ctx_counter;
         .end_cell()
         .begin_parse();
 
+    total_size += (status_slice.slice_bits() + cumulative_gas_used_size_slice.slice_bits() + cumulative_gas_used_slice.slice_bits()) / 8;
     total_size += logs_bloom_size + (logs_bloom_size_slice.slice_bits() / 8);
     int total_size_encoded = encode_length(total_size, 192);
     slice total_size_encoded_slice = begin_cell()
@@ -79,6 +96,16 @@ global int ctx_counter;
     );
 
     hash = hash.update(
+        status_slice
+    );
+    hash = hash.update(
+        cumulative_gas_used_size_slice
+    );
+    hash = hash.update(
+        cumulative_gas_used_slice
+    );
+
+    hash = hash.update(
         logs_bloom_size_slice
     );
 
@@ -88,9 +115,12 @@ global int ctx_counter;
 
     cell log_body = begin_cell()
         .store_uint(hash.digest_keccak(), 256)
+        .store_ref(begin_cell().store_slice(status_slice).end_cell())
+        .store_ref(begin_cell().store_slice(cumulative_gas_used_size_slice).end_cell())
+        .store_ref(begin_cell().store_slice(cumulative_gas_used_slice).end_cell())
         .store_ref(begin_cell().store_slice(total_size_encoded_slice).end_cell())
-        .store_ref(begin_cell().store_slice(logs_bloom_size_slice).end_cell())
-        .store_ref(logs_bloom)
+        ;; .store_ref(begin_cell().store_slice(logs_bloom_size_slice).end_cell())
+        ;; .store_ref(logs_bloom)
 
         .end_cell();
 
