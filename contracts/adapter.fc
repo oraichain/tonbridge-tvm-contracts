@@ -155,7 +155,7 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
     if (op == op::transfer_notification()) {
         ;; throw_unless(111, equal_slices(sender_addr, adapter_jwallet_addr));
         int jetton_amount = in_msg_body~load_coins();
-        int from_address = in_msg_body~load_msg_addr();
+        slice from_address = in_msg_body~load_msg_addr();
         int eth_address = in_msg_body~load_uint(256);
         slice response_addr = in_msg_body~load_msg_addr(); ;; user
 
@@ -169,7 +169,7 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
         send_raw_message(burn_msg, 2 + 64); ;; //TODO: may be better mode
 
         cell data = begin_cell()
-                    .store_uint(amount, 256)
+                    .store_uint(jetton_amount, 256)
                     .store_uint(eth_address, 256)
                     .end_cell();
 

@@ -12,6 +12,12 @@ This is suitable for most tokens, if you need tokens transferable between workch
 
 -}
 
+#include "../imports/stdlib.fc";
+#include "../imports/op-codes.fc";
+#include "../imports/params.fc";
+#include "../imports/jetton-utils.fc";
+
+
 int min_tons_for_storage() asm "10000000 PUSHINT"; ;; 0.01 TON
 ;; Note that 2 * gas_consumptions is expected to be able to cover fees on both wallets (sender and receiver)
 ;; and also constant fees on inter-wallet interaction, in particular fwd fee on state_init transfer
