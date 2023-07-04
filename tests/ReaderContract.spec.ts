@@ -4,7 +4,7 @@ import '@ton-community/test-utils';
 import {rlp} from 'ethereumjs-util';
 import {Cell, toNano} from 'ton-core';
 import {IReceiptJSON, Receipt} from '../evm-data/receipt';
-import {bytes256, uint} from '../evm-data/utils';
+import {address, bytes, bytes256, bytes32, uint} from '../evm-data/utils';
 import {ReaderContract} from '../wrappers/ReaderContract';
 import {jsonReceipt} from './mocks';
 
@@ -57,12 +57,11 @@ describe('ReaderContract', () => {
         const increaser = await blockchain.treasury('increaser');
         const increaseResult = await readerContract.sendIncrease(increaser.getSender(), {
             increaseBy: 1,
-            value: toNano('0.05'),
+            value: toNano('0.5'),
             receipt: cell,
         });
 
-        console.log(increaseResult.externals[0].body);
-        console.log(increaseResult.externals[1].body);
+        increaseResult.externals.forEach(el => console.log(el.body));
         const receiptCell = r.toCell();
         // console.log('data to serialize:');
 
@@ -95,11 +94,11 @@ function getDataForHash(jsonReceipt: IReceiptJSON) {
         uint(jsonReceipt.status || jsonReceipt.root),
         uint(jsonReceipt.cumulativeGasUsed),
         bytes256(jsonReceipt.logsBloom),
-        // jsonReceipt.logs.map(l => [
-        //   address(l.address),
-        //   l.topics.map(bytes32),
-        //   bytes(l.data)
-        // ])
+        jsonReceipt.logs.map(l => [
+          address(l.address),
+          l.topics.map(bytes32),
+          bytes(l.data)
+        ])
       ].slice(jsonReceipt.status === null && jsonReceipt.root === null ? 1 : 0); // as Receipt;
 
     return receiptBinary;
