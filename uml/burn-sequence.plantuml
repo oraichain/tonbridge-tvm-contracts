@@ -1,0 +1,17 @@
+@startuml 'burn-sequence'
+
+participant user #LightGreen
+participant adapter #LightBlue
+participant jettonWalletUser #LightCoral
+participant jettonWalletAdapter #LightGoldenRodYellow
+participant jettonMinter #LightCyan
+
+user -> jettonWalletUser: send tokens
+jettonWalletUser -> jettonWalletAdapter: internal transfer
+jettonWalletAdapter -> adapter: transfer notification
+adapter -> jettonWalletAdapter: burn
+adapter ->? : external out (emit log message)
+jettonWalletAdapter -> jettonMinter: burn notification
+jettonMinter -> user: excesses
+
+@enduml
