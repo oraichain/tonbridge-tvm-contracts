@@ -2,7 +2,7 @@ import { compile } from '@ton-community/blueprint';
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton-community/sandbox';
 import '@ton-community/test-utils';
 import { ethers } from 'ethers';
-import { beginCell, Cell, Dictionary, toNano } from 'ton-core';
+import { beginCell, Cell, Dictionary, ExternalAddress, toNano } from 'ton-core';
 import { sha256 } from 'ton-crypto';
 import { IReceiptJSON, Receipt } from '../evm-data/receipt';
 import { Adapter } from '../wrappers/Adapter';
@@ -124,34 +124,13 @@ describe('Adapter', () => {
         expectSuccess(sendReceiptResult2.transactions, jettonMinter.address, jettonWallet.address);
 
         expect(userBalance.amount).toBe(2n * BigInt(dataArr[0])); // we send 2 receipts
-
-        // const burnRes = await jettonWallet.sendBurn(user.getSender(), {
-        //     value: toNano('100'),
-        //     jettonAmount: 2000n,
-        //     queryId: 0,
-        //     adapter_addr: adapter.address,
-        //     eth_addr: BigInt(eth_addr),
-        // });
-
-        // const msgOfMsg = sendReceiptResult2.transactions.map((tx) => tx.outMessages.values());
-        // const parsed = msgOfMsg.map((msgs) =>
-        //     msgs.map((m) => {
-        //         return { ...m, body: parseMsgPart(m.body) };
-        //     })
-        // );
-
-        // const addresses = {
-        //     adapter: adapter.address.toString(),
-        //     minter: jettonMinter.address.toString(),
-        //     userJWallet: jettonWallet.address.toString(),
-        //     user: user.address.toString(),
-        // };
-        // console.log(addresses);
     });
 
     it('should burn tokens', async () => {
         const userWalletAddr = await jettonMinter.getWalletAddress(user.address);
-        const jettonWallet = blockchain.openContract(JettonWallet.createFromAddress(userWalletAddr));
+        const adapterWalletAddr = await jettonMinter.getWalletAddress(adapter.address);
+        const jettonWalletUser = blockchain.openContract(JettonWallet.createFromAddress(userWalletAddr));
+        const jettonWalletAdapter = blockchain.openContract(JettonWallet.createFromAddress(adapterWalletAddr));
 
         const r = Receipt.fromJSON(JSON.parse(receipt) as unknown as IReceiptJSON);
         const cell = r.toCell();
@@ -164,28 +143,48 @@ describe('Adapter', () => {
         });
 
         const dataArr = jsonReceipt.logs.filter((l) => l.topics.includes(originalTopicId)).map((l) => l.data);
-        const walletBalance = await jettonWallet.getBalance();
+        const walletBalance = await jettonWalletUser.getBalance();
+
         expect(walletBalance.amount).toBe(BigInt(dataArr[0]));
 
-        const burnRes = await jettonWallet.sendBurn(user.getSender(), {
-            value: toNano('10'),
+        const burningAmount = 100000n;
+
+        const burnRes = await jettonWalletUser.sendTransfer(user.getSender(), {
+            value: toNano('1'),
+            toAddress: adapter.address,
             queryId: 0,
-            jettonAmount: 10000n,
-            eth_addr: BigInt(ethAddr),
-            adapter_addr: adapter.address,
+            fwdAmount: toNano('0.05'),
+            jettonAmount: burningAmount,
+            ethAddress: BigInt(ethAddr),
         });
 
-        expectSuccess(burnRes.transactions, user.address, jettonWallet.address);
-        expectSuccess(burnRes.transactions, jettonWallet.address, jettonMinter.address);
-        expectSuccess(burnRes.transactions, jettonMinter.address, adapter.address);
-        // expect(burnRes.transactions).toHaveTransaction({ from: adapter.address });
+        console.log({
+            user: user.address,
+            jWalletUser: jettonWalletUser.address,
+            jettonWalletAdapter: jettonWalletAdapter.address,
+            adapter: adapter.address,
+        });
 
-        // TODO: how to check in another way
+        expectSuccess(burnRes.transactions, user.address, jettonWalletUser.address);
+        expectSuccess(burnRes.transactions, jettonWalletUser.address, jettonWalletAdapter.address);
+        expectSuccess(burnRes.transactions, jettonWalletAdapter.address, adapter.address);
+        expectSuccess(burnRes.transactions, adapter.address, jettonWalletAdapter.address);
+        expectSuccess(burnRes.transactions, jettonWalletAdapter.address, jettonMinter.address);
+        expectSuccess(burnRes.transactions, jettonMinter.address, user.address);
+
         expect(
             burnRes.transactions
                 .filter((t) => t.externals.length > 0)
-                .map((t) => t.outMessages.values().map((m) => m.info.dest?.toString()))
+                .map((t) =>
+                    t.outMessages
+                        .values()
+                        .filter((m) => m.info.dest instanceof ExternalAddress)
+                        .map((m) => m.info.dest?.toString())
+                )
         ).toStrictEqual([['External<256:2>']]); // log::burn = 2;
+
+        const walletBalanceBurned = await jettonWalletUser.getBalance();
+        expect(walletBalanceBurned.amount).toBe(BigInt(dataArr[0]) - burningAmount);
     });
 
     it('should throw MSG_VALUE_TOO_SMALL if msg.value less that amount + 0.2 TON', async () => {

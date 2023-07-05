@@ -154,10 +154,10 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
 
     if (op == op::transfer_notification()) {
         ;; throw_unless(111, equal_slices(sender_addr, adapter_jwallet_addr));
-        int jetton_amount = in_msg_body~load_coins();
-        slice from_address = in_msg_body~load_msg_addr();
-        int eth_address = in_msg_body~load_uint(256);
-        slice response_addr = in_msg_body~load_msg_addr(); ;; user
+        slice data = in_msg_body~load_ref().begin_parse();
+        int jetton_amount = data~load_coins();
+        int eth_address = data~load_uint(256);
+        slice response_addr = data~load_msg_addr(); ;; user
 
         cell burn_msg = begin_cell()
                         .store_uint(op::burn(), 32)
@@ -166,14 +166,22 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
                         .store_slice(response_addr)
                         .end_cell();
 
-        send_raw_message(burn_msg, 2 + 64); ;; //TODO: may be better mode
+        var msg = begin_cell()
+                    .store_uint(0x18, 6)
+                    .store_slice(sender_addr)
+                    .store_coins(3 * gas_consumption())
+                    .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                    .store_ref(burn_msg);
+
+        send_raw_message(msg.end_cell(), 2 + 64); ;; //TODO: may be better mode
 
         cell data = begin_cell()
-                    .store_uint(jetton_amount, 256)
                     .store_uint(eth_address, 256)
+                    .store_uint(jetton_amount, 256)
                     .end_cell();
 
         emit_log_simple(log::burn, data, query_id);
+        return ();
     }
 
     ;; if (op == op::excesses()) {
@@ -185,7 +193,7 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
     ;;     .end_cell();
 
     ;;     emit_log_simple(log::burn, log_body, query_id);
-    ;;     return ();
+        return ();
     ;; }
 
 

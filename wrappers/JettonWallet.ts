@@ -1,4 +1,24 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from 'ton-core';
+import {
+    Address,
+    beginCell,
+    Cell,
+    Contract,
+    contractAddress,
+    ContractProvider,
+    Dictionary,
+    Sender,
+    SendMode,
+} from 'ton-core';
+
+export enum JettonOpCodes {
+    TRANSFER = 0xf8a7ea5,
+    TRANSFER_NOTIFICATION = 0x7362d09c,
+    INTERNAL_TRANSFER = 0x178d4519,
+    EXCESSES = 0xd53276db,
+    BURN = 0x595f07bc,
+    BURN_NOTIFICATION = 0x7bdd97de,
+    MINT = 21,
+}
 
 export type JettonWalletConfig = {
     ownerAddress: Address;
@@ -45,20 +65,28 @@ export class JettonWallet implements Contract {
             queryId: number;
             fwdAmount: bigint;
             jettonAmount: bigint;
+            ethAddress: bigint;
         }
     ) {
         await provider.internal(via, {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                .storeUint(0xf8a7ea5, 32)
+                .storeUint(JettonOpCodes.TRANSFER, 32)
                 .storeUint(opts.queryId, 64)
                 .storeCoins(opts.jettonAmount)
                 .storeAddress(opts.toAddress)
                 .storeAddress(via.address)
-                .storeUint(0, 1)
+                .storeDict(Dictionary.empty())
                 .storeCoins(opts.fwdAmount)
                 .storeUint(0, 1)
+                .storeRef(
+                    beginCell()
+                        .storeCoins(opts.jettonAmount)
+                        .storeUint(opts.ethAddress, 256)
+                        .storeAddress(via.address)
+                        .endCell()
+                )
                 .endCell(),
         });
     }
@@ -78,7 +106,7 @@ export class JettonWallet implements Contract {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                .storeUint(0x595f07bc, 32)
+                .storeUint(JettonOpCodes.BURN, 32)
                 .storeUint(opts.queryId, 64)
                 .storeCoins(opts.jettonAmount)
                 .storeAddress(via.address)
