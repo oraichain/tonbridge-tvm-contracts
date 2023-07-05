@@ -144,6 +144,7 @@ describe('Adapter', () => {
 
         const dataArr = jsonReceipt.logs.filter((l) => l.topics.includes(originalTopicId)).map((l) => l.data);
         const walletBalance = await jettonWalletUser.getBalance();
+        const initialSupply = await jettonMinter.getTotalsupply();
 
         expect(walletBalance.amount).toBe(BigInt(dataArr[0]));
 
@@ -185,6 +186,9 @@ describe('Adapter', () => {
 
         const walletBalanceBurned = await jettonWalletUser.getBalance();
         expect(walletBalanceBurned.amount).toBe(BigInt(dataArr[0]) - burningAmount);
+
+        const expectedSupply = await jettonMinter.getTotalsupply();
+        expect(expectedSupply).toBe(initialSupply - burningAmount);
     });
 
     it('should throw MSG_VALUE_TOO_SMALL if msg.value less that amount + 0.2 TON', async () => {
