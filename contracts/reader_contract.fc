@@ -38,20 +38,10 @@ global int ctx_counter;
     int l = 0;
     while(number) {
         l += 1;
-        number >>= 3;
-    }
-    return l;
-}
-
-(int) number_length2(int number) impure {
-    int l = 0;
-    while(number) {
-        l += 1;
         number >>= 8;
     }
     return l;
 }
-
 
 
 (int) encode_length(int len, int offset) impure {
@@ -59,17 +49,7 @@ global int ctx_counter;
         return len + offset;
     }
     else {
-        int l_length = ((number_length(len) + 1) / 2);
-        return ((offset + 55 + l_length) << (l_length * 8)) + len;
-    }
-}
-
-(int) encode_length2(int len, int offset) impure {
-    if (len < 56) {
-        return len + offset;
-    }
-    else {
-        int l_length = ((number_length2(len)));
+        int l_length = ((number_length(len)));
         return ((offset + 55 + l_length) << (l_length * 8)) + len;
     }
 }
@@ -80,7 +60,7 @@ global int ctx_counter;
     int topic_size_encoded = encode_length(topic_size, 128);
 
     slice topic_size_slice = begin_cell()
-        .store_uint(topic_size_encoded, number_length2(topic_size_encoded) * 8)
+        .store_uint(topic_size_encoded, number_length(topic_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -104,7 +84,7 @@ global int ctx_counter;
     int topic_size_encoded = encode_length(topic_size, 128);
 
     slice topic_size_slice = begin_cell()
-        .store_uint(topic_size_encoded, number_length2(topic_size_encoded) * 8)
+        .store_uint(topic_size_encoded, number_length(topic_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -134,10 +114,10 @@ global int ctx_counter;
 
     cell topics_cell = cs~load_ref();
     int topics_size = rlp_topics_size(topics_cell, 0);
-    int topics_size_encoded = encode_length2(topics_size, 192);
+    int topics_size_encoded = encode_length(topics_size, 192);
 
     slice topics_size_slice = begin_cell()
-        .store_uint(topics_size_encoded, number_length2(topics_size_encoded) * 8)
+        .store_uint(topics_size_encoded, number_length(topics_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -146,7 +126,7 @@ global int ctx_counter;
     int data_size_encoded = encode_length(data_size, 128);
 
     slice data_size_slice = begin_cell()
-        .store_uint(data_size_encoded, number_length2(data_size_encoded) * 8)
+        .store_uint(data_size_encoded, number_length(data_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -157,9 +137,9 @@ global int ctx_counter;
         + data_size
         + (data_size_slice.slice_bits() / 8);
 
-    int log_size_encoded = encode_length2(log_size, 192);
+    int log_size_encoded = encode_length(log_size, 192);
     slice log_size_slice = begin_cell()
-        .store_uint(log_size_encoded, number_length2(log_size_encoded) * 8)
+        .store_uint(log_size_encoded, number_length(log_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -196,10 +176,10 @@ global int ctx_counter;
 
     cell topics_cell = cs~load_ref();
     int topics_size = rlp_topics_size(topics_cell, 0);
-    int topics_size_encoded = encode_length2(topics_size, 192);
+    int topics_size_encoded = encode_length(topics_size, 192);
 
     slice topics_size_slice = begin_cell()
-        .store_uint(topics_size_encoded, number_length2(topics_size_encoded) * 8)
+        .store_uint(topics_size_encoded, number_length(topics_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -208,7 +188,7 @@ global int ctx_counter;
     int data_size_encoded = encode_length(data_size, 128);
 
     slice data_size_slice = begin_cell()
-        .store_uint(data_size_encoded, number_length2(data_size_encoded) * 8)
+        .store_uint(data_size_encoded, number_length(data_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -219,9 +199,9 @@ global int ctx_counter;
         + data_size
         + (data_size_slice.slice_bits() / 8);
 
-    int log_size_encoded = encode_length2(log_size, 192);
+    int log_size_encoded = encode_length(log_size, 192);
     slice log_size_slice = begin_cell()
-        .store_uint(log_size_encoded, number_length2(log_size_encoded) * 8)
+        .store_uint(log_size_encoded, number_length(log_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -268,7 +248,7 @@ global int ctx_counter;
     int logs_bloom_size_encoded = encode_length(logs_bloom_size, 128);
 
     slice logs_bloom_size_slice = begin_cell()
-        .store_uint(logs_bloom_size_encoded, number_length(logs_bloom_size_encoded) * 3)
+        .store_uint(logs_bloom_size_encoded, number_length(logs_bloom_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -278,7 +258,7 @@ global int ctx_counter;
     int logs_size_encoded = encode_length(logs_size, 192);
 
     slice logs_size_slice = begin_cell()
-        .store_uint(logs_size_encoded, number_length(logs_size_encoded) * 3)
+        .store_uint(logs_size_encoded, number_length(logs_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -287,7 +267,7 @@ global int ctx_counter;
     total_size += logs_size + (logs_size_slice.slice_bits() / 8);
     int total_size_encoded = encode_length(total_size, 192);
     slice total_size_encoded_slice = begin_cell()
-        .store_uint(total_size_encoded, number_length(total_size_encoded) * 3)
+        .store_uint(total_size_encoded, number_length(total_size_encoded) * 8)
         .end_cell()
         .begin_parse();
 
@@ -319,12 +299,12 @@ global int ctx_counter;
 
     cell log_body = begin_cell()
         .store_uint(hash.digest_keccak(), 256)
-        ;; .store_ref(begin_cell().store_slice(status_slice).end_cell())
-        ;; .store_ref(begin_cell().store_slice(cumulative_gas_used_size_slice).end_cell())
-        ;; .store_ref(begin_cell().store_slice(cumulative_gas_used_slice).end_cell())
+    ;; .store_ref(begin_cell().store_slice(status_slice).end_cell())
+    ;; .store_ref(begin_cell().store_slice(cumulative_gas_used_size_slice).end_cell())
+    ;; .store_ref(begin_cell().store_slice(cumulative_gas_used_slice).end_cell())
         .store_ref(begin_cell().store_slice(total_size_encoded_slice).end_cell())
-        ;; .store_ref(begin_cell().store_slice(logs_bloom_size_slice).end_cell())
-        ;; .store_ref(logs_bloom)
+    ;; .store_ref(begin_cell().store_slice(logs_bloom_size_slice).end_cell())
+    ;; .store_ref(logs_bloom)
         .store_ref(begin_cell().store_slice(logs_size_slice).end_cell())
 
         .end_cell();
