@@ -227,7 +227,10 @@ global int ctx_counter;
     tuple hash = init_hash();
     int total_size = 0;
 
-    int cumulative_gas_used_size = receipt_slice.slice_bits() / 8 - 1;
+    int cumulative_gas_used_size = receipt_slice.slice_bits() / 8 - 2;
+    slice type_slice = begin_cell()
+        .store_uint(receipt_slice~load_uint(8), 8)
+    .end_cell().begin_parse();
     slice status_slice = begin_cell()
         .store_uint(receipt_slice~load_uint(8), 8)
         .end_cell()
@@ -272,6 +275,8 @@ global int ctx_counter;
         .begin_parse();
 
 
+    hash = hash.update(type_slice);
+
     hash = hash.update(
         total_size_encoded_slice
     );
@@ -299,7 +304,7 @@ global int ctx_counter;
 
     cell log_body = begin_cell()
         .store_uint(hash.digest_keccak(), 256)
-    ;; .store_ref(begin_cell().store_slice(status_slice).end_cell())
+    .store_ref(begin_cell().store_slice(type_slice).end_cell())
     ;; .store_ref(begin_cell().store_slice(cumulative_gas_used_size_slice).end_cell())
     ;; .store_ref(begin_cell().store_slice(cumulative_gas_used_slice).end_cell())
         .store_ref(begin_cell().store_slice(total_size_encoded_slice).end_cell())

@@ -134,9 +134,10 @@ export class Receipt {
       return bldLg.endCell();
     };
 
-    const cellLogs = buildLogs(this.jsonData.logs);
+    const cellLogs = buildLogs([...this.jsonData.logs]);
 
     const res = beginCell()
+      .storeBuffer(uint(this.jsonData.type || "0x0"))
       .storeBuffer(uint(this.jsonData.status || this.jsonData.root))
       .storeBuffer(uint(this.jsonData.cumulativeGasUsed))
       .storeRef(buildBufs(bytes256(this.jsonData.logsBloom)));

@@ -70,7 +70,7 @@ describe('ReaderContract', () => {
         console.log(rlp.encode(parseData).toString('hex'));
         // console.log('hash:');
         console.log(Receipt.testSerialize(rlp.encode(parseData)).toString('hex').toUpperCase());
-
+        console.log(r.hash().toString('hex'));
         expect(increaseResult.transactions).toHaveTransaction({
             from: increaser.address,
             to: readerContract.address,
