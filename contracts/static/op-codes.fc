@@ -1,2 +1,6 @@
 ;; public
 int op::wrap() asm "0xf0a28992 PUSHINT";
+int op::receipt() asm "0 PUSHINT";
+int op::receipt_withdraw() asm "1 PUSHINT";
+int op::transfer_notification() asm "0x7362d09c PUSHINT";
+int op::burn() asm "0x595f07bc PUSHINT";

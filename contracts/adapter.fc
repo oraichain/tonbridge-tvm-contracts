@@ -5,8 +5,6 @@
 #include "static/errors.fc";
 #include "static/op-codes.fc";
 
-const op::receipt = 0;
-const op::receipt_withdraw = 1;
 const original_topic_id = 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925;
 
 int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
@@ -70,6 +68,8 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
         return ();
     }
 
+    slice sender_addr = cs~load_msg_addr();
+
     int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
     int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
 
@@ -80,15 +80,15 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
         throw_if(error::msg_value_too_small, (msg_value + 200000000 < amount));
 
         cell log_body = begin_cell()
-      .store_uint(eth_addr, 256)
-      .store_uint(amount, 256)
-      .end_cell();
+            .store_uint(eth_addr, 256)
+            .store_uint(amount, 256)
+            .end_cell();
 
         emit_log_simple(log::wrap, log_body, query_id);
         return ();
     }
 
-    if (op == op::receipt) {
+    if (op == op::receipt()) {
 
         int ton_addr = in_msg_body~load_uint(256);
         slice jminter_address = in_msg_body~load_msg_addr();
@@ -114,32 +114,32 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
         cell log_body = begin_cell()
             .store_slice(jminter_address)
             .store_ref(begin_cell()
-            .store_slice(address)
-            ;; .store_ref(begin_cell().store_uint(res2, 256).end_cell())
-            ;; .store_ref(t_data)
-            .end_cell())
-        ;; .store_uint(amount, 256)
-        .end_cell();
+                .store_slice(address)
+                ;; .store_ref(begin_cell().store_uint(res2, 256).end_cell())
+                ;; .store_ref(t_data)
+                .end_cell())
+            ;; .store_uint(amount, 256)
+            .end_cell();
         emit_log_simple(log::wrap, log_body, 0);
 
         cell mint = begin_cell()
-        .store_uint(21, 32)
-        .store_uint(0, 64)
-        .store_slice(address)
-        .store_coins(2 * gas_consumption())
-        .store_ref(
-            begin_cell()
-            .store_uint(0x178d4519, 32)
+            .store_uint(21, 32)
             .store_uint(0, 64)
-            .store_coins(amount)
-            ;; TODO: use null addr
-            .store_slice(none_addr())
-            .store_slice(none_addr())
-            .store_coins(gas_consumption())
-            .store_uint(0, 1)
-          .end_cell()
-        )
-        .end_cell();
+            .store_slice(address)
+            .store_coins(2 * gas_consumption())
+            .store_ref(
+                begin_cell()
+                .store_uint(0x178d4519, 32)
+                .store_uint(0, 64)
+                .store_coins(amount)
+                ;; TODO: use null addr
+                .store_slice(none_addr())
+                .store_slice(none_addr())
+                .store_coins(gas_consumption())
+                .store_uint(0, 1)
+                .end_cell()
+            )
+            .end_cell();
 
         send_raw_message(begin_cell()
             .store_uint(0x18, 6)
@@ -152,22 +152,52 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
         return ();
     }
 
-    if (op == op::excesses()) {
-        int eth_addr = in_msg_body~load_uint(256);
-        int amount = in_msg_body~load_coins();
-        cell log_body = begin_cell()
-        ;; .store_uint(0x11, 32)
-        ;; .store_uint(query_id, 64)
-            .store_uint(eth_addr, 256)
-            .store_uint(amount, 256)
-        .end_cell();
+    if (op == op::transfer_notification()) {
+        ;; throw_unless(111, equal_slices(sender_addr, adapter_jwallet_addr));
+        slice data = in_msg_body~load_ref().begin_parse();
+        int jetton_amount = data~load_coins();
+        int eth_address = data~load_uint(256);
+        slice response_addr = data~load_msg_addr(); ;; user
 
-        emit_log_simple(log::burn, log_body, query_id);
+        cell burn_msg = begin_cell()
+                        .store_uint(op::burn(), 32)
+                        .store_uint(query_id, 64)
+                        .store_coins(jetton_amount)
+                        .store_slice(response_addr)
+                        .end_cell();
+
+        var msg = begin_cell()
+                    .store_uint(0x18, 6)
+                    .store_slice(sender_addr)
+                    .store_coins(3 * gas_consumption())
+                    .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                    .store_ref(burn_msg);
+
+        send_raw_message(msg.end_cell(), 2 + 64); ;; //TODO: may be better mode
+
+        cell data = begin_cell()
+                    .store_uint(eth_address, 256)
+                    .store_uint(jetton_amount, 256)
+                    .end_cell();
+
+        emit_log_simple(log::burn, data, query_id);
         return ();
     }
 
+    ;; if (op == op::excesses()) {
+    ;;     int eth_addr = in_msg_body~load_uint(256);
+    ;;     int amount = in_msg_body~load_coins();
+    ;;     cell log_body = begin_cell()
+    ;;         .store_uint(eth_addr, 256)
+    ;;         .store_uint(amount, 256)
+    ;;     .end_cell();
 
-    if (op::receipt_withdraw) {
+    ;;     emit_log_simple(log::burn, log_body, query_id);
+        return ();
+    ;; }
+
+
+    if (op::receipt_withdraw()) {
         int ton_addr = in_msg_body~load_uint(256);
         slice jminter_address = in_msg_body~load_msg_addr();
         cell receipt = in_msg_body~load_ref();

@@ -4,6 +4,7 @@ export type AdapterConfig = {};
 
 export enum BridgeOpCodes {
     WRAP = 0xf0a28992,
+    RECEIPT = 0,
 }
 
 export function adapterConfigToCell(config: AdapterConfig): Cell {
@@ -46,7 +47,7 @@ export class Adapter implements Contract {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                .storeUint(0, 32)
+                .storeUint(BridgeOpCodes.RECEIPT, 32)
                 .storeUint(opts.queryID ?? 0, 64)
                 .storeUint(BigInt(opts.addrStr), 256)
                 .storeAddress(opts.jminterAddr)
