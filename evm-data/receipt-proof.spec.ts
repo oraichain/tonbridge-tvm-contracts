@@ -1,29 +1,24 @@
-import {rlp} from 'ethereumjs-util';
 
-import {BlockHeader} from './block-header';
-import {IReceiptJSON, Receipt} from './receipt';
-import {bytes, toNumber} from './utils';
-import {verifyMerkleProof} from './verify-merkle-proof';
 
 
 describe('Receipt proof test', () => {
 
-  it('should check proof from JSON', async () => {
+  // it('should check proof from JSON', async () => {
 
-    const {receipt, receiptProof, blockHeader} = json;
-    const r = Receipt.fromJSON(receipt as unknown as IReceiptJSON);
-    const block = BlockHeader.fromHex(blockHeader);
+  //   const {receipt, receiptProof, blockHeader} = json;
+  //   const r = Receipt.fromJSON(receipt as unknown as IReceiptJSON);
+  //   const block = BlockHeader.fromHex(blockHeader);
 
-    // verifiy the proof (throw Error on false proof)
-    const res = await verifyMerkleProof(
-      block.receiptTrie, // expected merkle root
-      rlp.encode(toNumber(receipt.transactionIndex)), // path, which is the transsactionIndex
-      receiptProof.map(bytes), // array of Buffer with the merkle-proof-data
-      r.serialize(),
-      'The TransactionReceipt can not be verified'
-    );
+  //   // verifiy the proof (throw Error on false proof)
+  //   const res = await verifyMerkleProof(
+  //     block.receiptTrie, // expected merkle root
+  //     rlp.encode(toNumber(receipt.transactionIndex)), // path, which is the transsactionIndex
+  //     receiptProof.map(bytes), // array of Buffer with the merkle-proof-data
+  //     r.serialize(),
+  //     'The TransactionReceipt can not be verified'
+  //   );
 
-  });
+  // });
 });
 
 

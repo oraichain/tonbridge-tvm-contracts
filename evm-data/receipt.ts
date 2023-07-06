@@ -44,8 +44,8 @@ export class Receipt {
     //
   }
 
-  public static testSerialize(r: Buffer[]) {
-    const data = Buffer.concat(r);
+  public static testSerialize(r: any) {
+    const data = Buffer.concat([r]);
     return keccak(data);
   }
 
@@ -96,7 +96,7 @@ export class Receipt {
       const c = beginCell().storeBuffer(b);
 
       if (buf.length > b.length) {
-        c.storeRef(buildBufs(buf.subarray(b.length + 1)));
+        c.storeRef(buildBufs(buf.subarray(b.length)));
       }
 
       return c.endCell();

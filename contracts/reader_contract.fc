@@ -5,7 +5,7 @@
 tuple init_hash () asm "NIL";
 tuple update(tuple t, slice s) asm "TPUSH";
 int digest_keccak(tuple t) asm " DUP TLEN EXPLODEVAR HASHEXT_KECCAK256";
-int HASHEXT_KECCAK(slice) asm " 1 PUSHINT HASHEXT_KECCAK256";
+int HASHEXT_KECCAK(slice, slice) asm " 2 PUSHINT HASHEXT_KECCAK256";
 
 const op::increase = "op::increase"c; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case
 
@@ -15,6 +15,324 @@ const op::increase = "op::increase"c; ;; create an opcode from string using the 
 ;; since addresses in TON depend on the initial state of the contract
 global int ctx_id;
 global int ctx_counter;
+
+(int) rlp_bloom_size(cell bloom, int len) impure {
+    slice cs = bloom.begin_parse();
+    if (cs.slice_refs_empty?()) {
+        return len + cs.slice_bits();
+    }
+
+    return rlp_bloom_size(cs~load_ref(), len + cs.slice_bits());
+}
+
+(tuple) rlp_bloom(cell bloom, tuple hash) impure {
+    slice cs = bloom.begin_parse();
+    if (cs.slice_refs_empty?()) {
+        return hash.update(cs);
+    }
+
+    return rlp_bloom(cs~load_ref(), hash.update(cs));
+}
+
+(int) number_length(int number) impure {
+    int l = 0;
+    while(number) {
+        l += 1;
+        number >>= 3;
+    }
+    return l;
+}
+
+(int) number_length2(int number) impure {
+    int l = 0;
+    while(number) {
+        l += 1;
+        number >>= 8;
+    }
+    return l;
+}
+
+
+
+(int) encode_length(int len, int offset) impure {
+    if (len < 56) {
+        return len + offset;
+    }
+    else {
+        int l_length = ((number_length(len) + 1) / 2);
+        return ((offset + 55 + l_length) << (l_length * 8)) + len;
+    }
+}
+
+(int) encode_length2(int len, int offset) impure {
+    if (len < 56) {
+        return len + offset;
+    }
+    else {
+        int l_length = ((number_length2(len)));
+        return ((offset + 55 + l_length) << (l_length * 8)) + len;
+    }
+}
+
+(int) rlp_topics_size(cell topics, int len) {
+    slice cs = topics.begin_parse();
+    int topic_size = cs.slice_bits() / 8;
+    int topic_size_encoded = encode_length(topic_size, 128);
+
+    slice topic_size_slice = begin_cell()
+        .store_uint(topic_size_encoded, number_length2(topic_size_encoded) * 8)
+        .end_cell()
+        .begin_parse();
+
+    ;; cell log_body = begin_cell()
+    ;;     .store_ref(begin_cell().store_slice(topic_size_slice).end_cell())
+    ;;     .store_ref(begin_cell().store_uint(len + topic_size + (topic_size_slice.slice_bits() / 8), 256).end_cell())
+    ;;     .end_cell();
+
+    ;; emit_log_simple(log::wrap, log_body, 0);
+
+    if (cs.slice_refs_empty?()) {
+        return len + topic_size + (topic_size_slice.slice_bits() / 8);
+    }
+
+    return rlp_topics_size(cs~load_ref(), len + topic_size + (topic_size_slice.slice_bits() / 8));
+}
+
+(tuple) rlp_topics_to_hex(cell topics, tuple hash) {
+    slice cs = topics.begin_parse();
+    int topic_size = cs.slice_bits() / 8;
+    int topic_size_encoded = encode_length(topic_size, 128);
+
+    slice topic_size_slice = begin_cell()
+        .store_uint(topic_size_encoded, number_length2(topic_size_encoded) * 8)
+        .end_cell()
+        .begin_parse();
+
+    ;; cell log_body = begin_cell()
+    ;;     .store_ref(begin_cell().store_slice(topic_size_slice).end_cell())
+    ;;     .store_ref(begin_cell().store_uint(len + topic_size + (topic_size_slice.slice_bits() / 8), 256).end_cell())
+    ;;     .end_cell();
+
+    ;; emit_log_simple(log::wrap, log_body, 0);
+
+    if (cs.slice_refs_empty?()) {
+        return hash.update(topic_size_slice).update(cs);
+    }
+
+    return rlp_topics_to_hex(cs~load_ref(), hash.update(topic_size_slice).update(cs));
+}
+
+(tuple) rlp_logs_to_hex(cell logs, tuple hex) impure {
+    slice cs = logs.begin_parse();
+    int addr_size = cs.slice_bits() / 8;
+    int addr_size_encoded = encode_length(addr_size, 128);
+
+    slice addr_size_slice = begin_cell()
+        .store_uint(addr_size_encoded, 8)
+        .end_cell()
+        .begin_parse();
+
+    cell topics_cell = cs~load_ref();
+    int topics_size = rlp_topics_size(topics_cell, 0);
+    int topics_size_encoded = encode_length2(topics_size, 192);
+
+    slice topics_size_slice = begin_cell()
+        .store_uint(topics_size_encoded, number_length2(topics_size_encoded) * 8)
+        .end_cell()
+        .begin_parse();
+
+    cell data_cell = cs~load_ref();
+    int data_size = rlp_bloom_size(data_cell, 0) / 8;
+    int data_size_encoded = encode_length(data_size, 128);
+
+    slice data_size_slice = begin_cell()
+        .store_uint(data_size_encoded, number_length2(data_size_encoded) * 8)
+        .end_cell()
+        .begin_parse();
+
+    int log_size = addr_size
+        + (addr_size_slice.slice_bits() / 8)
+        + topics_size
+        + (topics_size_slice.slice_bits() / 8)
+        + data_size
+        + (data_size_slice.slice_bits() / 8);
+
+    int log_size_encoded = encode_length2(log_size, 192);
+    slice log_size_slice = begin_cell()
+        .store_uint(log_size_encoded, number_length2(log_size_encoded) * 8)
+        .end_cell()
+        .begin_parse();
+
+    ;; cell log_body = begin_cell()
+    ;;     .store_ref(begin_cell().store_slice(addr_size_slice).end_cell())
+    ;;     .store_ref(begin_cell().store_slice(topics_size_slice).end_cell())
+    ;;     .store_ref(begin_cell().store_slice(data_size_slice).end_cell())
+    ;;     .store_ref(begin_cell().store_slice(log_size_slice).end_cell())
+    ;;     .end_cell();
+
+    ;; emit_log_simple(log::wrap, log_body, 0);
+
+    hex = hex.update(log_size_slice).update(addr_size_slice).update(cs).update(topics_size_slice);
+    hex = rlp_topics_to_hex(topics_cell, hex);
+    hex = hex.update(data_size_slice);
+    hex = rlp_bloom(data_cell, hex);
+
+    if (cs.slice_refs_empty?()) {
+        return hex;
+    }
+
+    return rlp_logs_to_hex(cs~load_ref(), hex);
+}
+
+(int) rlp_logs_size(cell logs, int len) impure {
+    slice cs = logs.begin_parse();
+    int addr_size = cs.slice_bits() / 8;
+    int addr_size_encoded = encode_length(addr_size, 128);
+
+    slice addr_size_slice = begin_cell()
+        .store_uint(addr_size_encoded, 8)
+        .end_cell()
+        .begin_parse();
+
+    cell topics_cell = cs~load_ref();
+    int topics_size = rlp_topics_size(topics_cell, 0);
+    int topics_size_encoded = encode_length2(topics_size, 192);
+
+    slice topics_size_slice = begin_cell()
+        .store_uint(topics_size_encoded, number_length2(topics_size_encoded) * 8)
+        .end_cell()
+        .begin_parse();
+
+    cell data_cell = cs~load_ref();
+    int data_size = rlp_bloom_size(data_cell, 0) / 8;
+    int data_size_encoded = encode_length(data_size, 128);
+
+    slice data_size_slice = begin_cell()
+        .store_uint(data_size_encoded, number_length2(data_size_encoded) * 8)
+        .end_cell()
+        .begin_parse();
+
+    int log_size = addr_size
+        + (addr_size_slice.slice_bits() / 8)
+        + topics_size
+        + (topics_size_slice.slice_bits() / 8)
+        + data_size
+        + (data_size_slice.slice_bits() / 8);
+
+    int log_size_encoded = encode_length2(log_size, 192);
+    slice log_size_slice = begin_cell()
+        .store_uint(log_size_encoded, number_length2(log_size_encoded) * 8)
+        .end_cell()
+        .begin_parse();
+
+    int next_size = len + log_size + (log_size_slice.slice_bits()) / 8;
+
+    ;; cell log_body = begin_cell()
+    ;;     .store_ref(begin_cell().store_slice(addr_size_slice).end_cell())
+    ;;     .store_ref(begin_cell().store_slice(topics_size_slice).end_cell())
+    ;;     .store_ref(begin_cell().store_slice(data_size_slice).end_cell())
+    ;;     .store_ref(begin_cell().store_slice(log_size_slice).end_cell())
+    ;;     .end_cell();
+
+    ;; emit_log_simple(log::wrap, log_body, 0);
+
+    if (cs.slice_refs_empty?()) {
+        return next_size;
+    }
+
+    return rlp_logs_size(cs~load_ref(), next_size);
+}
+
+(tuple) rlp_receipt(slice receipt_slice) impure {
+    tuple hash = init_hash();
+    int total_size = 0;
+
+    int cumulative_gas_used_size = receipt_slice.slice_bits() / 8 - 1;
+    slice status_slice = begin_cell()
+        .store_uint(receipt_slice~load_uint(8), 8)
+        .end_cell()
+        .begin_parse();
+
+    slice cumulative_gas_used_size_slice = begin_cell()
+        .store_uint(encode_length(cumulative_gas_used_size, 128), number_length(cumulative_gas_used_size) * 8)
+        .end_cell()
+        .begin_parse();
+
+    slice cumulative_gas_used_slice = begin_cell()
+        .store_uint(receipt_slice~load_uint(cumulative_gas_used_size * 8), cumulative_gas_used_size * 8)
+        .end_cell()
+        .begin_parse();
+
+    cell logs_bloom = receipt_slice~load_ref();
+    int logs_bloom_size = rlp_bloom_size(logs_bloom, 0) / 8;
+    int logs_bloom_size_encoded = encode_length(logs_bloom_size, 128);
+
+    slice logs_bloom_size_slice = begin_cell()
+        .store_uint(logs_bloom_size_encoded, number_length(logs_bloom_size_encoded) * 3)
+        .end_cell()
+        .begin_parse();
+
+
+    cell logs_cell = receipt_slice~load_ref();
+    int logs_size = rlp_logs_size(logs_cell, 0);
+    int logs_size_encoded = encode_length(logs_size, 192);
+
+    slice logs_size_slice = begin_cell()
+        .store_uint(logs_size_encoded, number_length(logs_size_encoded) * 3)
+        .end_cell()
+        .begin_parse();
+
+    total_size += (status_slice.slice_bits() + cumulative_gas_used_size_slice.slice_bits() + cumulative_gas_used_slice.slice_bits()) / 8;
+    total_size += logs_bloom_size + (logs_bloom_size_slice.slice_bits() / 8);
+    total_size += logs_size + (logs_size_slice.slice_bits() / 8);
+    int total_size_encoded = encode_length(total_size, 192);
+    slice total_size_encoded_slice = begin_cell()
+        .store_uint(total_size_encoded, number_length(total_size_encoded) * 3)
+        .end_cell()
+        .begin_parse();
+
+
+    hash = hash.update(
+        total_size_encoded_slice
+    );
+
+    hash = hash.update(
+        status_slice
+    );
+    hash = hash.update(
+        cumulative_gas_used_size_slice
+    );
+    hash = hash.update(
+        cumulative_gas_used_slice
+    );
+
+    hash = hash.update(
+        logs_bloom_size_slice
+    );
+
+    hash = rlp_bloom(logs_bloom, hash);
+    hash = hash.update(
+        logs_size_slice
+    );
+    hash = rlp_logs_to_hex(logs_cell, hash);
+
+
+    cell log_body = begin_cell()
+        .store_uint(hash.digest_keccak(), 256)
+        ;; .store_ref(begin_cell().store_slice(status_slice).end_cell())
+        ;; .store_ref(begin_cell().store_slice(cumulative_gas_used_size_slice).end_cell())
+        ;; .store_ref(begin_cell().store_slice(cumulative_gas_used_slice).end_cell())
+        .store_ref(begin_cell().store_slice(total_size_encoded_slice).end_cell())
+        ;; .store_ref(begin_cell().store_slice(logs_bloom_size_slice).end_cell())
+        ;; .store_ref(logs_bloom)
+        .store_ref(begin_cell().store_slice(logs_size_slice).end_cell())
+
+        .end_cell();
+
+    emit_log_simple(log::wrap, log_body, 0);
+
+    return hash;
+}
 
 ;; load_data populates storage variables using stored data
 () load_data() impure {
@@ -55,50 +373,10 @@ global int ctx_counter;
 
     cell receipt = in_msg_body~load_ref();
     slice receipt_slice = receipt.begin_parse();
-    cell logs_bloom = receipt_slice~load_ref();
-    slice logs_bloom1 = logs_bloom.begin_parse();
-
-
-    cell logs_bloom_1 = logs_bloom1~load_ref();
-    slice logs_bloom2 = logs_bloom_1.begin_parse();
-
-    cell logs_bloom_2 = logs_bloom2~load_ref();
-    slice logs_bloom3 = logs_bloom_2.begin_parse();
-
-    ;; slice first_bug =
-
-    ;; slice tmp_slice = receipt.begin_parse();
-    ;; slice some_cell = tmp_slice~load_ref().begin_parse();
-    ;; slice p1 = some_cell~load_ref().begin_parse();
-    ;; slice p2 = p1~load_ref().begin_parse();
-
-    ;; cell wtf = begin_cell().store_uint(12345, 16).end_cell();
-    ;; slice wwtf = wtf.begin_parse();
-    ;; var res = init_hash().update(some_cell).update(p1).update(p2);
-    ;; res = init_hash().update(wwtf);
-    ;; cell tmp_cell = tmp_slice~load_ref();
-    ;; tmp_slice = tmp_cell.begin_parse();
-    ;; res = res.update(tmp_slice);
-
-    int hash = init_hash()
-    .update(receipt_slice)
-    .update(logs_bloom1)
-    .update(logs_bloom2)
-    .update(logs_bloom3)
-    .digest_keccak();
-    ;; int hash = res.digest_keccak();
-    ;; .digest_keccak();
-    ;; int hash = HASHEXT_KECCAK(wwtf);
-
+    tuple hash_tuple = rlp_receipt(receipt_slice);
 
     cell log_body = begin_cell()
-        .store_uint(hash, 256)
-        ;; .store_ref(receipt)
-    ;; .store_slice(wwtf)
-    ;; .store_ref(begin_cell().store_slice(some_cell).end_cell())
-    ;; .store_ref(begin_cell().store_slice(p1).end_cell())
-    ;; .store_ref(begin_cell().store_slice(p2).end_cell())
-
+        .store_uint(hash_tuple.digest_keccak(), 256)
         .end_cell();
 
     emit_log_simple(log::wrap, log_body, 0);
