@@ -7,7 +7,7 @@ tuple update(tuple t, slice s) asm "TPUSH";
 int digest_keccak(tuple t) asm " DUP TLEN EXPLODEVAR HASHEXT_KECCAK256";
 int HASHEXT_KECCAK(slice, slice) asm " 2 PUSHINT HASHEXT_KECCAK256";
 
-const op::increase = "op::increase"c; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case
+const op::calc_hash = "op::calc_hash"c; ;; create an opcode from string using the "c" prefix, this results in 0x46cf6aeb opcode in this case
 
 ;; storage variables
 
@@ -301,42 +301,7 @@ global int ctx_counter;
     );
     hash = rlp_logs_to_hex(logs_cell, hash);
 
-
-    cell log_body = begin_cell()
-        .store_uint(hash.digest_keccak(), 256)
-    .store_ref(begin_cell().store_slice(type_slice).end_cell())
-    ;; .store_ref(begin_cell().store_slice(cumulative_gas_used_size_slice).end_cell())
-    ;; .store_ref(begin_cell().store_slice(cumulative_gas_used_slice).end_cell())
-        .store_ref(begin_cell().store_slice(total_size_encoded_slice).end_cell())
-    ;; .store_ref(begin_cell().store_slice(logs_bloom_size_slice).end_cell())
-    ;; .store_ref(logs_bloom)
-        .store_ref(begin_cell().store_slice(logs_size_slice).end_cell())
-
-        .end_cell();
-
-    emit_log_simple(log::wrap, log_body, 0);
-
     return hash;
-}
-
-;; load_data populates storage variables using stored data
-() load_data() impure {
-    var ds = get_data().begin_parse();
-
-    ctx_id = ds~load_uint(32);
-    ctx_counter = ds~load_uint(32);
-
-    ds.end_parse();
-}
-
-;; save_data stores storage variables as a cell into persistent storage
-() save_data() impure {
-    set_data(
-        begin_cell()
-            .store_uint(ctx_id, 32)
-            .store_uint(ctx_counter, 32)
-            .end_cell()
-    );
 }
 
 ;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
@@ -351,41 +316,21 @@ global int ctx_counter;
         return ();
     }
 
-    load_data(); ;; here we populate the storage variables
-
     int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
     int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
 
-    cell receipt = in_msg_body~load_ref();
-    slice receipt_slice = receipt.begin_parse();
-    tuple hash_tuple = rlp_receipt(receipt_slice);
+    if (op == op::calc_hash) {
+        cell receipt = in_msg_body~load_ref();
+        slice receipt_slice = receipt.begin_parse();
+        tuple hash_tuple = rlp_receipt(receipt_slice);
 
-    cell log_body = begin_cell()
-        .store_uint(hash_tuple.digest_keccak(), 256)
-        .end_cell();
+        cell log_body = begin_cell()
+            .store_uint(hash_tuple.digest_keccak(), 256)
+            .end_cell();
 
-    emit_log_simple(log::wrap, log_body, 0);
-
-    if (op == op::increase) {
-        int increase_by = in_msg_body~load_uint(32);
-        ctx_counter += increase_by;
-        save_data();
+        emit_log_simple(log::wrap, log_body, 0);
         return ();
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
-}
-
-;; get methods are a means to conveniently read contract data using, for example, HTTP APIs
-;; they are marked with method_id
-;; note that unlike in many other smart contract VMs, get methods cannot be called by other contracts
-
-int get_counter() method_id {
-    load_data();
-    return ctx_counter;
-}
-
-int get_id() method_id {
-    load_data();
-    return ctx_id;
 }

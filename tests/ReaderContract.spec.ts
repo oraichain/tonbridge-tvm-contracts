@@ -1,12 +1,10 @@
-import {compile} from '@ton-community/blueprint';
-import {Blockchain, SandboxContract} from '@ton-community/sandbox';
+import { compile } from '@ton-community/blueprint';
+import { Blockchain, SandboxContract } from '@ton-community/sandbox';
 import '@ton-community/test-utils';
-import {rlp} from 'ethereumjs-util';
-import {Cell, toNano} from 'ton-core';
-import {IReceiptJSON, Receipt} from '../evm-data/receipt';
-import {address, bytes, bytes256, bytes32, uint} from '../evm-data/utils';
-import {ReaderContract} from '../wrappers/ReaderContract';
-import {jsonReceipt} from './mocks';
+import { Cell, toNano } from 'ton-core';
+import { IReceiptJSON, Receipt } from '../evm-data/receipt';
+import { ReaderContract } from '../wrappers/ReaderContract';
+import { jsonReceipt } from './mocks';
 
 describe('ReaderContract', () => {
     let code: Cell;
@@ -43,71 +41,28 @@ describe('ReaderContract', () => {
         });
     });
 
-    it('should deploy', async () => {
-        // the check is done inside beforeEach
-        // blockchain and readerContract are ready to use
-    });
-
-    it('should increase counter', async () => {
-        const parseData = getDataForHash(jsonReceipt as unknown as IReceiptJSON);
-        const increaseTimes = 3;
+    it('should emit correct hash', async () => {
         const r = Receipt.fromJSON(jsonReceipt as unknown as IReceiptJSON);
         const cell = r.toCell();
 
+        const expectedHash = BigInt('0x' + r.hash().toString('hex'));
+
         const increaser = await blockchain.treasury('increaser');
-        const increaseResult = await readerContract.sendIncrease(increaser.getSender(), {
-            increaseBy: 1,
+        const calcHashRes = await readerContract.sendCalcHash(increaser.getSender(), {
             value: toNano('0.5'),
             receipt: cell,
         });
 
-        increaseResult.externals.forEach(el => console.log(el.body));
-        const receiptCell = r.toCell();
-        // console.log('data to serialize:');
-
-        console.log('parseData:', parseData.map(c => Array.isArray(c) ? c : c.toString('hex')));
-        // console.log(parseData[3]);
-        console.log(rlp.encode(parseData).toString('hex'));
-        // console.log('hash:');
-        console.log(Receipt.testSerialize(rlp.encode(parseData)).toString('hex').toUpperCase());
-        console.log(r.hash().toString('hex'));
-        expect(increaseResult.transactions).toHaveTransaction({
+        expect(calcHashRes.transactions).toHaveTransaction({
             from: increaser.address,
             to: readerContract.address,
             success: true,
         });
+
+        expect(calcHashRes.externals.length).toEqual(1);
+
+        const externalOutBodySlice = calcHashRes.externals[0].body.asSlice();
+        const actualHash = externalOutBodySlice.loadUintBig(256);
+        expect(expectedHash).toBe(actualHash);
     });
 });
-
-function getDataForHash(jsonReceipt: IReceiptJSON) {
-    // const start = receiptCell.beginParse();
-    // const baseData = start.loadBuffer(4);
-    // let logsBloomRef = start.loadRef().beginParse();
-    // const logsBloom1 = logsBloomRef.loadBuffer(32 * 3);
-    // logsBloomRef = logsBloomRef.loadRef().beginParse();
-    // const logsBloom2 = logsBloomRef.loadBuffer(32 * 3);
-    // logsBloomRef = logsBloomRef.loadRef().beginParse();
-
-    // const logsBloom3 = logsBloomRef.loadBuffer(logsBloomRef.remainingBits / 8);
-
-    const receiptBinary /* : TReceiptBinary */ = [
-        uint(jsonReceipt.status || jsonReceipt.root),
-        uint(jsonReceipt.cumulativeGasUsed),
-        bytes256(jsonReceipt.logsBloom),
-        jsonReceipt.logs.map(l => [
-          address(l.address),
-          l.topics.map(bytes32),
-          bytes(l.data)
-        ])
-      ].slice(jsonReceipt.status === null && jsonReceipt.root === null ? 1 : 0); // as Receipt;
-
-    return receiptBinary;
-
-    return [
-        uint(jsonReceipt.status || jsonReceipt.root),
-        uint(jsonReceipt.cumulativeGasUsed),
-        // logsBloom1,
-        // logsBloom2,
-        // logsBloom3
-    ]
-}

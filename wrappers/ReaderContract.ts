@@ -10,7 +10,7 @@ export function readerContractConfigToCell(config: ReaderContractConfig): Cell {
 }
 
 export const Opcodes = {
-    increase: 0x7e8764ef,
+    calcHash: 0x46cf6aeb,
 };
 
 export class ReaderContract implements Contract {
@@ -34,11 +34,10 @@ export class ReaderContract implements Contract {
         });
     }
 
-    async sendIncrease(
+    async sendCalcHash(
         provider: ContractProvider,
         via: Sender,
         opts: {
-            increaseBy: number;
             value: bigint;
             queryID?: number;
             receipt: Cell;
@@ -48,9 +47,8 @@ export class ReaderContract implements Contract {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                .storeUint(Opcodes.increase, 32)
+                .storeUint(Opcodes.calcHash, 32)
                 .storeUint(opts.queryID ?? 0, 64)
-                .storeUint(opts.increaseBy, 32)
                 .storeRef(opts.receipt)
                 .endCell(),
         });
