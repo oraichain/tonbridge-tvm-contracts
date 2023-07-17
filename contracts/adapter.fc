@@ -193,7 +193,7 @@ int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
     ;;     .end_cell();
 
     ;;     emit_log_simple(log::burn, log_body, query_id);
-        return ();
+        ;; return ();
     ;; }
 
 

@@ -1,4 +1,4 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from 'ton-core';
+import {Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode} from 'ton-core';
 
 export type ReaderContractConfig = {
     id: number;
@@ -11,6 +11,7 @@ export function readerContractConfigToCell(config: ReaderContractConfig): Cell {
 
 export const Opcodes = {
     calcHash: 0x46cf6aeb,
+    verifyProof: 0x5e742370
 };
 
 export class ReaderContract implements Contract {
@@ -50,6 +51,32 @@ export class ReaderContract implements Contract {
                 .storeUint(Opcodes.calcHash, 32)
                 .storeUint(opts.queryID ?? 0, 64)
                 .storeRef(opts.receipt)
+                .endCell(),
+        });
+    }
+
+    async sendVerifyProof(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            queryID?: number;
+            receipt: Cell;
+            rootHash: Cell;
+            path: Cell;
+            receiptProof: Cell;
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.verifyProof, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.receipt)
+                .storeRef(opts.rootHash)
+                .storeRef(opts.path)
+                .storeRef(opts.receiptProof)
                 .endCell(),
         });
     }
