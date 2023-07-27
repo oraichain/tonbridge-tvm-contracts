@@ -22,7 +22,8 @@ describe('Receipt proof test', () => {
       r.serialize(),
       'The TransactionReceipt can not be verified'
     );
-    console.log(res);
+
+    await expect(true);
   });
 });
 

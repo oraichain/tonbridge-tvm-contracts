@@ -1,15 +1,16 @@
+import {IReceiptJSON, Receipt} from './receipt';
 
 
 describe('Receipt test', () => {
 
-  // it('should create new instance from JSON', async () => {
+  it('should create new instance from JSON', async () => {
 
-  //   const r = Receipt.fromJSON(jsonReceipt as unknown as IReceiptJSON);
-  //   const cell = r.toCell();
-  //   const str = cell.toString();
+    const r = Receipt.fromJSON(jsonReceipt as unknown as IReceiptJSON);
+    const cell = r.toCell();
+    const str = cell.toString();
 
-  //   expect(str).toEqual(strResult);
-  // });
+    expect(str).toEqual(strResult);
+  });
 });
 
 
