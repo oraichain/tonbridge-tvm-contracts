@@ -379,6 +379,10 @@ global int ctx_counter;
 }
 
 () check_proof(cell proof, int wantedHash, int key) impure {
+    if (compare_hash(proof, wantedHash) == 0) {
+        throw(0xfffa);
+    }
+
     slice proof_slice = proof.begin_parse();
 
 
@@ -504,9 +508,7 @@ global int ctx_counter;
     slice cs = root_hash.begin_parse();
     int wantedHash = cs~load_uint(256);
 
-    if (compare_hash(proof, wantedHash) == 0) {
-        throw(0xfffa);
-    }
+
 
     ;; cell log_body = begin_cell()
     ;;         .store_ref(proof)

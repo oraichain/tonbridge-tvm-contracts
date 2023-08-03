@@ -13,6 +13,7 @@ describe('Receipt proof test', () => {
     const {receipt, receiptProof, blockHeader} = json;
     const r = Receipt.fromJSON(receipt as unknown as IReceiptJSON);
     const block = BlockHeader.fromHex(blockHeader);
+    console.log(block.receiptTrie.toString('hex'));
 
     // verifiy the proof (throw Error on false proof)
     const res = await verifyMerkleProof(

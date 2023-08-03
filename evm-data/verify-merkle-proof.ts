@@ -30,6 +30,7 @@ class Node {
       this.type = (data[0][0] >> 4) > 1 ? 'leaf' : 'extension'
       this.value = data[1]
       this.key = stringToNibbles(data[0]).slice((data[0][0] >> 4) % 2 ? 1 : 2)
+      console.log(stringToNibbles(data[0]), (data[0][0] >> 4), (data[0][0] >> 4) % 2 ? 1 : 2, this.key)
     }
     else if (data.length === 0)
       this.type = 'empty'
@@ -43,7 +44,7 @@ export async function verifyMerkleProof(
   rootHash: Buffer,
   path: Buffer,
   proof: Buffer[],
-  expectedValue: Buffer,
+  expectedValue: Buffer, // receipt.serialize()
   errorMsg?: string,
 ) {
 
@@ -69,6 +70,8 @@ export async function verifyMerkleProof(
     // create the node
     const node = lastNode = new Node(rlp.decode(p) as any)
 
+    console.log(wantedHash.toString('hex'));
+
     switch (node.type) {
       case 'empty':
         if (i == 0 && expectedValue === null)
@@ -89,7 +92,6 @@ export async function verifyMerkleProof(
         const childHash = node.raw[key[0]] as Buffer
         // remove the first item
         key.splice(0, 1)
-
 
         if (childHash.length === 2) {
           const embeddedNode = new Node(childHash as any as Buffer[])
@@ -114,7 +116,7 @@ export async function verifyMerkleProof(
       case 'leaf':
       case 'extension':
         const val = node.value
-
+        console.log('node key:', node.key);
         // if the relativeKey in the leaf does not math our rest key, we throw!
         if (matchingNibbleLength(node.key, key) !== node.key.length) {
           // so we have a wrong leaf here, if we actually expected this node to not exist,

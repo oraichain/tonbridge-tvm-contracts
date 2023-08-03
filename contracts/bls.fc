@@ -1,0 +1,58 @@
+#include "imports/stdlib.fc";
+#include "utils/messages.fc";
+#include "static/logs.fc";
+
+tuple init_hash () asm "NIL";
+tuple update(tuple t, slice s) asm "TPUSH";
+(int) bls_fast_verify(tuple data) asm "DUP TLEN EXPLODEVAR DROP BLS_FASTAGGREGATEVERIFY";
+;; int bls_fast_aggregate_verify(tuple msgs, slice pub, slice sig) asm(msgs) "DUP TLEN" asm(pub sig) "BLS_FASTAGGREGATEVERIFY ";
+
+const op::verify_bls = "op::verify_bls"c; ;; create an opcode from string using the "c" prefix, this results in 0x6a3337e0 opcode in this case
+
+;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) { ;; ignore all bounced messages
+        return ();
+    }
+
+    int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
+    int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+
+    if (op == op::verify_bls) {
+      cell receipt = in_msg_body~load_ref();
+      slice receipt_slice = receipt.begin_parse();
+
+      tuple hash = init_hash();
+      hash = hash.tpush(receipt_slice);
+      receipt_slice = receipt_slice~load_ref().begin_parse();
+      hash = hash.tpush(receipt_slice);
+      receipt_slice = receipt_slice~load_ref().begin_parse();
+      hash = hash.tpush(receipt_slice);
+
+      receipt_slice = receipt_slice~load_ref().begin_parse();
+      hash = hash.tpush(receipt_slice~load_uint(receipt_slice.slice_bits()));
+
+      receipt_slice = receipt_slice~load_ref().begin_parse();
+      hash = hash.tpush(receipt_slice);
+      receipt_slice = receipt_slice~load_ref().begin_parse();
+      hash = hash.tpush(receipt_slice);
+
+      int x = hash.bls_fast_verify();
+
+      cell log_body = begin_cell()
+        .store_int(x, 16)
+        .store_ref(receipt)
+        .end_cell();
+
+    emit_log_simple(log::wrap, log_body, 0);
+      return ();
+    }
+
+    throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
+}
