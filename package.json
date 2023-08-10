@@ -37,6 +37,7 @@
         "@ton-community/func-js": "0.6.3-tvmbeta.1"
     },
     "dependencies": {
-        "@chainsafe/blst": "^0.2.9"
+        "@chainsafe/blst": "^0.2.9",
+        "@noble/curves": "^1.1.0"
     }
 }

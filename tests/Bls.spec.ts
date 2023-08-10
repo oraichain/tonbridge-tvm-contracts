@@ -1,4 +1,5 @@
 import {PublicKey, Signature, fastAggregateVerify} from '@chainsafe/blst';
+import {bls12_381 as bls} from '@noble/curves/bls12-381';
 import {compile} from '@ton-community/blueprint';
 import {Blockchain, SandboxContract} from '@ton-community/sandbox';
 import '@ton-community/test-utils';
@@ -112,5 +113,21 @@ describe('BlsContract', () => {
         console.log(res);
     });
 
+    it('should emit correct hash 2', async () => {
+      const privateKeys = [
+        '18f020b98eb798752a50ed0563b079c125b0db5dd0b1060d1c1b47d4a193e1e4',
+        'ed69a8c50cf8c9836be3b67c7eeff416612d45ba39a5c099d48fa668bf558c9c',
+        '16ae669f3be7a2121e17d0c68c05a8f3d6bef21ec0f2315f1d7aec12484e4cf5',
+      ];
+      const message = '64726e3da8';
+      const publicKeys = privateKeys.map(bls.getPublicKey);
+
+      const signatures = privateKeys.map((p) => bls.sign(message, p));
+
+      const aggPubKey = bls.aggregatePublicKeys(publicKeys);
+      const aggSignature = bls.aggregateSignatures(signatures);
+      const isValid = bls.verify(aggSignature, message, aggPubKey);
+      console.log({ signatures: signatures, aggSignature, isValid });
+    })
 });
 

@@ -10,6 +10,9 @@ int HASHEXT_KECCAK(slice, slice) asm " 2 PUSHINT HASHEXT_KECCAK256";
 const op::calc_hash = "op::calc_hash"c; ;; create an opcode from string using the "c" prefix, this results in 0x46cf6aeb opcode in this case
 const op::verify_proof = "op::verify_proof"c; ;; create an opcode from string using the "c" prefix, this results in 5e742370 opcode in this case
 
+const data:node_leaf = "data:node_leaf"c; ;; b95a0273
+const data:node_branch = "data:node_branch"c; ;; 40a54ae8
+const data:node_empty = "data:empty_branch"c; ;; e28eb9cc
 ;; storage variables
 
 ;; id is required to be able to create different instances of counters
@@ -351,6 +354,91 @@ global int ctx_counter;
     return keccak_proof(cs~load_ref(), hex);
 }
 
+(tuple) tuple_push_refs(cell data, tuple hex) impure {
+    slice cs = data.begin_parse();
+    hex = hex.update(cs);
+    if (cs.slice_refs_empty?()) {
+        return hex;
+    }
+
+    return tuple_push_refs(cs~load_ref(), hex);
+}
+
+(int) leaf_data_proof_size(cell proof_part, int total_size) impure {
+    slice cs = proof_part.begin_parse();
+    int data_size = cs.slice_bits() / 8;
+    total_size += data_size;
+
+    if (cs.slice_refs_empty?()) {
+        return total_size;
+    }
+
+    return leaf_data_proof_size(cs~load_ref(), total_size);
+}
+
+(int) compare_leaf_hash(cell proof, int wanted_hash) impure {
+
+
+
+    slice proof_slice = proof.begin_parse();
+    ;; data = 20
+    cell data_cell = proof_slice~load_ref();
+    int data_size = leaf_data_proof_size(data_cell, 0);
+    int data_size_encoded = encode_length(data_size, 128);
+    slice data_size_encoded_slice = begin_cell()
+        .store_uint(data_size_encoded, number_length(data_size_encoded) * 8)
+        .end_cell()
+        .begin_parse();
+
+    int size_of_data_key = proof_slice.slice_bits();
+    int data_key = proof_slice~load_uint(size_of_data_key);
+    cell data_key = begin_cell().store_uint(data_key, size_of_data_key).end_cell();
+
+    int proof_size = data_size + number_length(data_size_encoded) + size_of_data_key / 8; ;;keccak_proof_size(proof, 0);
+    int proof_size_encoded = encode_length(proof_size, 192);
+    slice proof_size_encoded_slice = begin_cell()
+        .store_uint(proof_size_encoded, number_length(proof_size_encoded) * 8)
+        .end_cell()
+        .begin_parse();
+
+    tuple hash = init_hash();
+    hash = hash.update(
+        proof_size_encoded_slice
+    );
+
+
+    hash = keccak_proof(data_key, hash);
+
+
+    hash = hash.update(
+        data_size_encoded_slice
+    );
+
+    hash = tuple_push_refs(data_cell, hash);
+    int hash_res = hash.digest_keccak();
+
+
+        cell log_body = begin_cell()
+            .store_uint(hash_res, 256)
+            .store_uint(wanted_hash, 256)
+            .store_ref(
+                begin_cell()
+                .store_slice(proof_size_encoded_slice)
+                .end_cell()
+            )
+            .store_ref(
+                data_key
+            )
+            .store_ref(
+                data_cell
+            )
+        .end_cell();
+
+        emit_log_simple(log::wrap, log_body, 0);
+
+    return hash_res == wanted_hash;
+}
+
 (int) compare_hash(cell proof, int wanted_hash) impure {
     int proof_size = keccak_proof_size(proof, 0);
     int proof_size_encoded = encode_length(proof_size, 192);
@@ -378,21 +466,23 @@ global int ctx_counter;
     return get_child_hash(cs~load_ref(), depth - 1);
 }
 
-() check_proof(cell proof, int wantedHash, int key) impure {
-    if (compare_hash(proof, wantedHash) == 0) {
-        throw(0xfffa);
+() check_proof(cell proof, int wantedHash, int key, cell receipt) impure {
+    slice proofs_slice = proof.begin_parse();
+    int proof_type = proofs_slice~load_uint(32);
+    proof = proofs_slice~load_ref();
+
+    if (proof_type == data:node_leaf) {
+        if (compare_leaf_hash(proof, wantedHash) == 0) {
+            throw(999);
+        }
+    } elseif (compare_hash(proof, wantedHash) == 0) {
+        throw(999);
     }
 
     slice proof_slice = proof.begin_parse();
-
-
-    cell proof_content_ref = proof_slice~load_ref();
-    int depth = proof_content_ref.cell_depth();
-
-    ;; branch
-    if (depth == 15) {
-        ;; this.type = 'branch'
-    ;;   this.value = data[16]
+    ;; cell proof_content_ref = proof_slice~load_ref();
+    ;; int depth = proof_content_ref.cell_depth();
+    if (proof_type == data:node_branch) {
         if(key == 0) {
             if (proof_slice.slice_refs_empty?() == 0) {
                 throw(0xfffa);
@@ -419,24 +509,21 @@ global int ctx_counter;
         ;;   return embeddedNode.value
         ;; }
         ;; else
-        wantedHash = child_hash;
 
         cell log_body = begin_cell()
             .store_uint(child_hash, 256)
-            .store_uint(key, 256)
+            .store_uint(wantedHash, 256)
         .end_cell();
 
         emit_log_simple(log::wrap, log_body, 0);
-        ;; // find the childHash
-        ;; const childHash = node.raw[key[0]] as Buffer
-        ;; // remove the first item
-        ;; key.splice(0, 1)
+
+        wantedHash = child_hash;
+
     }
-    ;; leaf or extension
-    if (depth == 0) {
-        ;; this.type = (data[0][0] >> 4) > 1 ? 'leaf' : 'extension'
-    ;;   this.value = data[1]
-    ;;   this.key = stringToNibbles(data[0]).slice((data[0][0] >> 4) % 2 ? 1 : 2)
+    if (proof_type == data:node_empty) {
+        throw(500);
+    }
+    if (proof_type == data:node_leaf) {
         int node_key = proof_slice~load_uint(proof_slice.slice_bits());
         int condition = node_key >> 4 % 2;
         node_key = condition == 1 ? node_key >> 4 : node_key >> 8;
@@ -451,14 +538,25 @@ global int ctx_counter;
         }
 
         if (key == 0) {
-            if(proof_slice.slice_refs_empty?() != -1) {
+            if(proofs_slice.slice_refs_empty?() != -1) {
+
                 throw(0xfffa);
             }
             ;; rlp(receipt) != value => throw
+            slice receipt_slice = receipt.begin_parse();
+            int receipt_hash = (rlp_receipt(receipt_slice)).digest_keccak();
 
-            ;; if () {
-            ;;     throw(0xfffa);
-            ;; }
+            tuple data_hash_tuple = init_hash();
+            data_hash_tuple = tuple_push_refs(proof_slice~load_ref(), data_hash_tuple);
+            int data_hash = data_hash_tuple.digest_keccak();
+
+            if(receipt_hash != data_hash) {
+                throw(0xfffa);
+            }
+
+            if (receipt_slice.slice_refs_empty?() != 0) {
+                throw(0xfffa);
+            }
             return ();
         } else {
             cell value_cell = proof_slice~load_ref();
@@ -466,16 +564,9 @@ global int ctx_counter;
             wantedHash = value_cs~load_uint(256);
         }
     }
-    ;; empty
-    ;; if (depth == 0) {
-        ;; if (i == 0 && expectedValue === null)
-        ;;   return null
-        ;; throw new Error('invalid empty node here')
-        ;; throw(0xfffa);
-    ;; }
 
      cell log_body = begin_cell()
-            .store_uint(depth, 256)
+            .store_uint(proof_type, 32)
             .store_ref(proof)
     .end_cell();
 
@@ -491,9 +582,16 @@ global int ctx_counter;
 
     ;;     emit_log_simple(log::wrap, log_body, 0);
 
-    if(proof_slice.slice_refs_empty?() == 0) {
-        return check_proof(proof_slice~load_ref(), wantedHash, key);
+    if(proofs_slice.slice_refs_empty?() == 0) {
+        return check_proof(proofs_slice~load_ref(), wantedHash, key, receipt);
     }
+
+    ;; if we expected this to be null and there is not further node since wantedHash is empty or we had a extension as last element, than it is ok not to find leafs
+    ;;   if (expectedValue === null && (lastNode === null || lastNode.type === 'extension' || wantedHash.length === 0))
+    ;;     return null
+
+    ;; we reached the end of the proof, but not of the path
+    throw(0xfffa);
 }
 
 () verify_merkle_proof(slice in_msg_body) impure {
@@ -515,15 +613,7 @@ global int ctx_counter;
     ;;     .end_cell();
 
     ;;     emit_log_simple(log::wrap, log_body, 0);
-    check_proof(proof, wantedHash, key);
-
-    ;; TODO:
-    ;; if we expected this to be null and there is not further node since wantedHash is empty or we had a extension as last element, than it is ok not to find leafs
-    ;;   if (expectedValue === null && (lastNode === null || lastNode.type === 'extension' || wantedHash.length === 0))
-    ;;     return null
-
-    ;; we reached the end of the proof, but not of the path
-    ;; throw(0xfffa);
+    check_proof(proof, wantedHash, key, receipt);
 }
 
 ;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
