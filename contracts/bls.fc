@@ -48,7 +48,7 @@ const op::verify_bls = "op::verify_bls"c; ;; create an opcode from string using 
 
       cell log_body = begin_cell()
         .store_int(x, 16)
-        .store_ref(receipt)
+        ;; .store_ref(receipt)
         .end_cell();
 
     emit_log_simple(log::wrap, log_body, 0);
