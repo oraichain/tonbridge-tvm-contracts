@@ -1,0 +1,95 @@
+
+int sha256(tuple t) asm " DUP TLEN EXPLODEVAR HASHEXT_SHA256";
+
+(int) tlen(tuple data) asm "TLEN";
+
+(int) sha_hash_2(int a, int b) impure {
+  tuple data = empty_tuple();
+  data.tpush(a);
+  data.tpush(b);
+  return sha256(data);
+}
+
+;; Unoptimized variant
+int pow (int a, int n) {
+    int i = 0;
+    int value = a;
+    while (i < n - 1) {
+        a *= value;
+        i += 1;
+    }
+    return a;
+}
+
+int bitLength(int n) impure {
+  int length = 0;
+
+  while (n != 0) {
+    n = n / 2;
+    length += 1;
+  }
+
+  return length;
+}
+
+(int) nextPowerOf2(int n) impure {
+  return n <= 0 ? 1 : pow(2, bitLength(n - 1));
+}
+
+
+(int) mix_in_length(int root, int length) impure {
+  ;; TODO:
+  ;;   const lengthBuf = Buffer.alloc(32);
+  ;; write length in first 6 bytes (reversed)
+  ;; 0x1234 0 2
+  ;; 34 12 0 0 0 .... 0
+  ;;   lengthBuf.writeUIntLE(length, 0, 6);
+  ;;   return hash64(root, lengthBuf);
+  int lengthBuf = length;
+  return sha_hash_2(root, lengthBuf);
+}
+
+(int) zeroHash(int depth) impure {
+  if (depth == 0) {
+    ;; TODO: return hash from 32b zeros
+    return 0;
+  }
+
+  return sha_hash_2(zeroHashes(depth - 1), zeroHashes(depth - 1));
+}
+
+(int) merkleize(tuple chunks, int padFor) impure {
+  int layerCount = bitLength(nextPowerOf2(padFor) - 1);
+  if (chunks.tlen() == 0) {
+    return zeroHash(layerCount);
+  }
+
+  int chunkCount = 0; ;; chinks.length;
+
+  ;; Instead of pushing on all padding zero chunks at the leaf level
+  ;; we push on zero hash chunks at the highest possible level to avoid over-hashing
+  int l = 0;
+  repeat(layerCount) {
+    int padCount = chunkCount % 2;
+    int paddedChunkCount = chunkCount + padCount;
+
+    ;; if the chunks.length is odd
+    ;; we need to push on the zero-hash of that level to merkleize that level
+    repeat(padCount) {
+      chunks.tpush(zeroHash(l));
+    }
+
+    tuple newChunks = empty_tuple();
+
+    while (chunks.tlen() > 1) {
+      newChunks.tpush(sha_hash_2(chunks~list_next(), chunks~list_next()));
+    }
+
+    chunks = newChunks;
+
+    chunkCount = paddedChunkCount / 2;
+    l += 1;
+  }
+
+  return chunks.list_next();
+}
