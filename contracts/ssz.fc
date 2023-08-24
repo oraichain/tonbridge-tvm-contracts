@@ -1,0 +1,85 @@
+#include "imports/stdlib.fc";
+#include "utils/messages.fc";
+#include "static/logs.fc";
+#include "ssz/ssz_utils.fc";
+
+const op::run_ssz = "op::run_ssz"c; ;; create an opcode from string using the "c" prefix, this results in 0x86f1bcc5 opcode in this case
+
+;; ;; basic
+;; hashTreeRoot(value: V): Uint8Array {
+;;     // TODO: Optimize
+;;     const uint8Array = new Uint8Array(32);
+;;     const dataView = new DataView(uint8Array.buffer, uint8Array.byteOffset, uint8Array.byteLength);
+;;     this.value_serializeToBytes({uint8Array, dataView}, 0, value);
+;;     return uint8Array;
+;;   }
+
+;; ;; bitList
+;; hashTreeRoot(value: BitArray): Uint8Array {
+;;     return mix_in_length(super.hashTreeRoot(value), value.bitLen);
+;;   }
+
+
+
+;; ;; byteList
+;; hashTreeRoot(value: ByteArray): Uint8Array {
+;;     return mix_in_length(super.hashTreeRoot(value), value.length);
+;;   }
+
+;; ;; composite
+;; hashTreeRoot(value: V): Uint8Array {
+;;     // Return cached mutable root if any
+;;     if (this.cachePermanentRootStruct) {
+;;       const cachedRoot = (value as ValueWithCachedPermanentRoot)[symbolCachedPermanentRoot];
+;;       if (cachedRoot) {
+;;         return cachedRoot;
+;;       }
+;;     }
+
+;;     const root = merkleize(this.getRoots(value), this.maxChunkCount);
+
+;;     if (this.cachePermanentRootStruct) {
+;;       (value as ValueWithCachedPermanentRoot)[symbolCachedPermanentRoot] = root;
+;;     }
+
+;;     return root;
+;;   }
+
+
+
+;; ;; listBasic
+;; hashTreeRoot(value: ValueOf<ElementType>[]): Uint8Array {
+;;     return mix_in_length(super.hashTreeRoot(value), value.length);
+;;   }
+
+;; ;; listComposite
+;; hashTreeRoot(value: ValueOf<ElementType>[]): Uint8Array {
+;;     return mix_in_length(super.hashTreeRoot(value), value.length);
+;;   }
+
+;; ;; union
+;; hashTreeRoot(value: ValueOfTypes<Types>): Uint8Array {
+;;     return mix_in_length(super.hashTreeRoot(value), value.selector);
+;;   }
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) { ;; ignore all bounced messages
+        return ();
+    }
+
+    int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
+    int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+
+    if (op == op::run_ssz) {
+
+      return();
+    }
+
+    throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
+}

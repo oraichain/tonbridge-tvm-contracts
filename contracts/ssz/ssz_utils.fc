@@ -3,7 +3,22 @@ int sha256(tuple t) asm " DUP TLEN EXPLODEVAR HASHEXT_SHA256";
 
 (int) tlen(tuple data) asm "TLEN";
 
-(int) sha_hash_2(int a, int b) impure {
+(slice) writeUIntLE(int value, int size) impure {
+  builder data_cell = begin_cell();
+
+  int diff = 32 - size;
+
+  repeat(size) {
+    data_cell.store_uint(value, 8);
+    value = value >> 8;
+  }
+
+  data_cell.store_uint(0, diff * 8);
+
+  return data_cell.end_cell().begin_parse();
+}
+
+(int) sha_hash_2(slice a, slice b) impure {
   tuple data = empty_tuple();
   data.tpush(a);
   data.tpush(b);
@@ -38,24 +53,17 @@ int bitLength(int n) impure {
 
 
 (int) mix_in_length(int root, int length) impure {
-  ;; TODO:
-  ;;   const lengthBuf = Buffer.alloc(32);
-  ;; write length in first 6 bytes (reversed)
-  ;; 0x1234 0 2
-  ;; 34 12 0 0 0 .... 0
-  ;;   lengthBuf.writeUIntLE(length, 0, 6);
-  ;;   return hash64(root, lengthBuf);
-  int lengthBuf = length;
-  return sha_hash_2(root, lengthBuf);
+  slice lengthBuf = writeUIntLE(length, 6);
+  return sha_hash_2(begin_cell().store_uint(root, 32 * 8).end_cell().begin_parse(), lengthBuf);
 }
 
 (int) zeroHash(int depth) impure {
   if (depth == 0) {
-    ;; TODO: return hash from 32b zeros
     return 0;
+    ;; return begin_cell().store_uint(0, 32 * 8).end_cell().begin_parse();
   }
-
-  return sha_hash_2(zeroHashes(depth - 1), zeroHashes(depth - 1));
+  slice a = begin_cell().store_uint(zeroHash(depth - 1), 32 * 8).end_cell().begin_parse();
+  return sha_hash_2(a, a);
 }
 
 (int) merkleize(tuple chunks, int padFor) impure {
@@ -64,7 +72,7 @@ int bitLength(int n) impure {
     return zeroHash(layerCount);
   }
 
-  int chunkCount = 0; ;; chinks.length;
+  int chunkCount = chunks.tlen();
 
   ;; Instead of pushing on all padding zero chunks at the leaf level
   ;; we push on zero hash chunks at the highest possible level to avoid over-hashing
@@ -91,5 +99,33 @@ int bitLength(int n) impure {
     l += 1;
   }
 
-  return chunks.list_next();
+  int res = chunks~list_next();
+  return res;
 }
+
+
+;; /**
+;;  * Split a long Uint8Array into Uint8Array of exactly 32 bytes
+;;  */
+(tuple) splitIntoRootChunks(tuple longChunk) impure {
+  ;;   const chunkCount = Math.ceil(longChunk.length / 32);
+  int chunkCount = longChunk.tlen() / 32;
+  tuple chunks = empty_tuple();
+
+  repeat(chunkCount) {
+    ;;     const chunk = new Uint8Array(32);
+    ;;     chunk.set(longChunk.slice(i * 32, (i + 1) * 32));
+    ;;     chunks[i] = chunk;
+
+    ;; chunks.tpush();
+  }
+
+  return chunks;
+}
+
+;; () hashTreeRoot(value) impure {
+;;   const root = merkleize(this.getRoots(value), this.maxChunkCount);
+
+;;   return root;
+;; }
+
