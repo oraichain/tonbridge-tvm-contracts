@@ -1,5 +1,7 @@
+#include "../utils/messages.fc";
+#include "../static/logs.fc";
 
-int sha256(tuple t) asm " DUP TLEN EXPLODEVAR HASHEXT_SHA256";
+int sha256(slice a, slice b) asm "2 PUSHINT HASHEXT_SHA256";
 
 (int) tlen(tuple data) asm "TLEN";
 
@@ -9,20 +11,17 @@ int sha256(tuple t) asm " DUP TLEN EXPLODEVAR HASHEXT_SHA256";
   int diff = 32 - size;
 
   repeat(size) {
-    data_cell.store_uint(value, 8);
+    data_cell = data_cell.store_uint(value, 8);
     value = value >> 8;
   }
 
-  data_cell.store_uint(0, diff * 8);
+  data_cell = data_cell.store_uint(0, diff * 8);
 
   return data_cell.end_cell().begin_parse();
 }
 
 (int) sha_hash_2(slice a, slice b) impure {
-  tuple data = empty_tuple();
-  data.tpush(a);
-  data.tpush(b);
-  return sha256(data);
+  return sha256(a, b);
 }
 
 ;; Unoptimized variant
@@ -66,34 +65,66 @@ int bitLength(int n) impure {
   return sha_hash_2(a, a);
 }
 
-(int) merkleize(tuple chunks, int padFor) impure {
+(int) merkleize(tuple chunks, int padFor, int count) impure {
   int layerCount = bitLength(nextPowerOf2(padFor) - 1);
-  if (chunks.tlen() == 0) {
+  if (count == 0) {
     return zeroHash(layerCount);
   }
 
-  int chunkCount = chunks.tlen();
+  int chunkCount = count;
 
   ;; Instead of pushing on all padding zero chunks at the leaf level
   ;; we push on zero hash chunks at the highest possible level to avoid over-hashing
   int l = 0;
   repeat(layerCount) {
+
     int padCount = chunkCount % 2;
     int paddedChunkCount = chunkCount + padCount;
 
     ;; if the chunks.length is odd
     ;; we need to push on the zero-hash of that level to merkleize that level
     repeat(padCount) {
-      chunks.tpush(zeroHash(l));
+      chunks = cons(zeroHash(l), chunks);
     }
 
     tuple newChunks = empty_tuple();
 
-    while (chunks.tlen() > 1) {
-      newChunks.tpush(sha_hash_2(chunks~list_next(), chunks~list_next()));
-    }
+    repeat (paddedChunkCount / 2) {
+      int a = chunks~list_next();
+      int b = chunks~list_next();
+      newChunks = newChunks.tpush(sha_hash_2(
+        begin_cell().store_uint(b,32 * 8).end_cell().begin_parse(),
+        begin_cell().store_uint(a,32 * 8).end_cell().begin_parse()
+        ));
 
-    chunks = newChunks;
+        (tuple p, int rrr) = newChunks.tpop();
+    ;; cell log_body = begin_cell()
+    ;;     .store_uint(rrr, 32 * 8)
+    ;;     .store_ref(
+    ;;       begin_cell()
+    ;;         .store_uint(b,32 * 8)
+    ;;       .end_cell()
+    ;;     )
+    ;;     .store_ref(
+    ;;       begin_cell()
+    ;;         .store_uint(a,32 * 8)
+    ;;       .end_cell()
+    ;;     )
+    ;;   .end_cell();
+
+    ;; emit_log_simple(log::wrap, log_body, 0);
+    }
+    ;; cell log_body = begin_cell()
+    ;; .end_cell();
+
+    ;; emit_log_simple(log::wrap, log_body, 0);
+
+    tuple fixedChunks = empty_tuple();
+    while (newChunks.tlen() > 0) {
+      int hash = newChunks~tpop();
+      fixedChunks = cons(hash, fixedChunks);
+    }
+    chunks = fixedChunks;
 
     chunkCount = paddedChunkCount / 2;
     l += 1;

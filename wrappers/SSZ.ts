@@ -9,7 +9,12 @@ export function readerContractConfigToCell(config: SSZContractConfig): Cell {
 }
 
 export const Opcodes = {
-  run_ssz: 0x86f1bcc5
+  run_ssz: 0x86f1bcc5,
+
+  type__bool: 0xf43a7aa,
+  type__uint: 0xcc771d29,
+
+  type__bytelist: 0x31ffdd28,
 };
 
 export class SSZContract implements Contract {
@@ -39,7 +44,7 @@ export class SSZContract implements Contract {
         opts: {
             value: bigint;
             queryID?: number;
-            // receipt: Cell;
+            data: Cell;
         }
     ) {
         await provider.internal(via, {
@@ -48,7 +53,7 @@ export class SSZContract implements Contract {
             body: beginCell()
                 .storeUint(Opcodes.run_ssz, 32)
                 .storeUint(opts.queryID ?? 0, 64)
-                // .storeRef(opts.receipt)
+                .storeRef(opts.data)
                 .endCell(),
         });
     }
