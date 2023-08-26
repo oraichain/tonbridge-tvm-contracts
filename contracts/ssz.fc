@@ -87,17 +87,28 @@ const type::container = "type::container"c;
   return cons(count, fill);
 }
 
-(slice) hashTreeRoot(cell value) impure {
-  slice cs = value.begin_parse();
+(slice, slice) hashTreeRoot(slice cs) impure {
+  ;; slice cs = value.begin_parse();
   int data_type = cs~load_uint(32);
+
+  cell log_body = begin_cell()
+        .store_uint(data_type, 32)
+        .store_ref(
+          begin_cell()
+            .store_uint(cs.slice_refs(), 16)
+          .end_cell()
+        )
+        .end_cell();
+
+  emit_log_simple(log::wrap, log_body, 0);
 
   if (data_type == type::bool) {
     int data = cs~load_uint(1);
-    return begin_cell()
+    return (cs, begin_cell()
     .store_uint(data, 8)
     .store_uint(0, 31 * 8)
     .end_cell()
-    .begin_parse();
+    .begin_parse());
   }
 
   if (data_type == type::uint) {
@@ -106,53 +117,110 @@ const type::container = "type::container"c;
     int data = cs~load_uint(size * 8);
 
     if (size == 1) {
-      return begin_cell()
+      return (cs, begin_cell()
       .store_uint(data, size * 8)
       .store_uint(0, 31 * 8)
-      .end_cell().begin_parse();
+      .end_cell().begin_parse());
     }
     if (size == 2) {
-      return begin_cell()
+      return (cs, begin_cell()
       .store_uint(data & 0xFF, 8)
       .store_uint(data / 0x100, 8)
       .store_uint(0, 30 * 8)
-      .end_cell().begin_parse();
+      .end_cell().begin_parse());
     }
     if (size == 4) {
-      return begin_cell()
+      return (cs, begin_cell()
       .store_endian4(data)
       .store_uint(0, 28 * 8)
-      .end_cell().begin_parse();
+      .end_cell().begin_parse());
     }
     if (size == 8) {
-      if (isInf) {
-        data = 0xffffffffffffffff;
-      }
+      ;; if (isInf) {
+      ;;   data = 0xffffffffffffffff;
+      ;; }
 
-      return begin_cell()
+      return (cs, begin_cell()
       .store_endian8(data)
       .store_uint(0, 24 * 8)
-      .end_cell().begin_parse();
+      .end_cell().begin_parse());
     }
   }
-  if (data_type == type::byteList) {
+  if ((data_type == type::byteList)) {
     cell start = cs~load_ref();
     int padFor = cs~load_uint(32);
     int valueLength = cs~load_uint(64);
     int count = 0;
     tuple filled = fill_tuple(empty_tuple(), start, count);
     count = filled~list_next();
-    ;; int res = filled~tpop();
+
     int res = merkleize(filled, padFor, count);
     res = mix_in_length(res, valueLength);
-;;
-    return begin_cell()
-    .store_uint(res, 32 * 8)
-    .end_cell().begin_parse();
+
+    return (
+      cs,
+      begin_cell()
+        .store_uint(res, 32 * 8)
+      .end_cell()
+      .begin_parse()
+    );
   }
 
-  return begin_cell().end_cell().begin_parse();
+  if ((data_type == type::byteVector)) {
+    cell start = cs~load_ref();
+    int padFor = cs~load_uint(32);
+    int valueLength = cs~load_uint(64);
+    int count = 0;
+    tuple filled = fill_tuple(empty_tuple(), start, count);
+    count = filled~list_next();
+
+    int res = merkleize(filled, padFor, count);
+    ;; res = mix_in_length(res, valueLength);
+
+    return (
+      cs,
+      begin_cell()
+        .store_uint(res, 32 * 8)
+      .end_cell()
+      .begin_parse()
+    );
+  }
+
+  if (data_type == type::container) {
+    cell fields = cs~load_ref();
+    tuple chunks = empty_tuple();
+
+    int count = 0;
+    slice fields_slice = fields.begin_parse();
+
+    slice field_res = fields_slice~hashTreeRoot();
+    int field_hash = field_res~load_uint(32 * 8);
+    chunks = cons(field_hash, chunks);
+    count += 1;
+
+    while (fields_slice.slice_refs_empty?() == 0) {
+      fields = fields_slice~load_ref();
+      fields_slice = fields.begin_parse();
+
+      slice field_res = fields_slice~hashTreeRoot();
+      int field_hash = field_res~load_uint(32 * 8);
+
+      chunks = cons(field_hash, chunks);
+      count += 1;
+    }
+
+    int res = merkleize(chunks, count, count);
+
+    return (cs, begin_cell()
+    .store_uint(res, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
+  throw(1111);
+  return (cs, begin_cell().end_cell().begin_parse());
 }
+
+
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
@@ -170,8 +238,9 @@ const type::container = "type::container"c;
 
     if (op == op::run_ssz) {
       cell data = in_msg_body~load_ref();
+      slice data_slice = data.begin_parse();
 
-      slice res = hashTreeRoot(data);
+      slice res = data_slice~hashTreeRoot();
 
 
       cell log_body = begin_cell()

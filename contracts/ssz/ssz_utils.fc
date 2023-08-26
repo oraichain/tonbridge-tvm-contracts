@@ -24,15 +24,20 @@ int sha256(slice a, slice b) asm "2 PUSHINT HASHEXT_SHA256";
   return sha256(a, b);
 }
 
-;; Unoptimized variant
-int pow (int a, int n) {
-    int i = 0;
-    int value = a;
-    while (i < n - 1) {
-        a *= value;
-        i += 1;
+;; Optimized variant
+(int) pow (int n, int e) {
+    if (e == 0) {
+        return 1;
     }
-    return a;
+    if (e == 1) {
+        return n;
+    }
+    int p = pow(n, e / 2);
+    p *= p;
+    if ((e % 2) == 1) {
+        p *= n;
+    }
+    return p;
 }
 
 int bitLength(int n) impure {
@@ -71,13 +76,21 @@ int bitLength(int n) impure {
     return zeroHash(layerCount);
   }
 
+  cell log_body = begin_cell()
+        .store_uint(padFor, 32)
+        .store_uint(layerCount, 32)
+        .store_uint(count, 32)
+        ;; .store_slice(res)
+        .end_cell();
+
+  emit_log_simple(log::wrap, log_body, 0);
+
   int chunkCount = count;
 
   ;; Instead of pushing on all padding zero chunks at the leaf level
   ;; we push on zero hash chunks at the highest possible level to avoid over-hashing
   int l = 0;
   repeat(layerCount) {
-
     int padCount = chunkCount % 2;
     int paddedChunkCount = chunkCount + padCount;
 

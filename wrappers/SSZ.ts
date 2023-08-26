@@ -14,7 +14,9 @@ export const Opcodes = {
   type__bool: 0xf43a7aa,
   type__uint: 0xcc771d29,
 
+  type__byteVector: 0x8f2cdfd8,
   type__bytelist: 0x31ffdd28,
+  type__container: 0x81706e6d
 };
 
 export class SSZContract implements Contract {
