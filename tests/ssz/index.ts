@@ -1,0 +1,341 @@
+import {splitIntoRootChunks} from '@chainsafe/ssz/lib/util/merkleize';
+import {Cell, beginCell} from 'ton-core';
+import {bytes} from '../../evm-data/utils';
+import {Opcodes} from '../../wrappers/SSZ';
+import blockJson from './beacon-block.json';
+import {
+  BLSSignature,
+  MAX_ATTESTATIONS,
+  MAX_ATTESTER_SLASHINGS,
+  MAX_PROPOSER_SLASHINGS,
+  MAX_VALIDATORS_PER_COMMITTEE,
+  Root,
+  SignedBeaconBlock,
+  stringToBitArray,
+} from './ssz-beacon-type';
+
+interface IBeaconMessage {
+    slot: number;
+    proposer_index: number;
+    parent_root: string;
+    state_root: string;
+    body: {
+        randao_reveal: string;
+        eth1_data: {
+            deposit_root: string;
+            deposit_count: number;
+            block_hash: string;
+        };
+        graffiti: string;
+        proposer_slashings: any[];
+        attester_slashings: any[];
+        attestations: typeof blockJson.data.message.body.attestations;
+    };
+}
+
+export function buildBlockCell() {
+    const block = blockJson.data;
+
+    const hash = SignedBeaconBlock.hashTreeRoot({
+        message: {
+            ...block.message,
+            parent_root: bytes(block.message.parent_root),
+            state_root: bytes(block.message.state_root),
+            body: {
+                ...block.message.body,
+                randao_reveal: bytes(block.message.body.randao_reveal),
+                eth1_data: {
+                    ...block.message.body.eth1_data,
+                    deposit_root: bytes(block.message.body.eth1_data.deposit_root),
+                    deposit_count: block.message.body.eth1_data.deposit_count,
+                    block_hash: bytes(block.message.body.eth1_data.block_hash),
+                },
+                graffiti: bytes(block.message.body.graffiti),
+                proposer_slashings: block.message.body.proposer_slashings,
+                attester_slashings: block.message.body.attester_slashings,
+                attestations: [
+                    ...block.message.body.attestations.map((att) => {
+                        return {
+                            ...att,
+                            aggregation_bits: stringToBitArray(att.aggregation_bits),
+                            data: {
+                                ...att.data,
+                                slot: att.data.slot,
+                                index: att.data.index,
+                                beacon_block_root: bytes(att.data.beacon_block_root),
+                                source: {
+                                    epoch: att.data.source.epoch,
+                                    root: bytes(att.data.source.root),
+                                },
+                                target: {
+                                    epoch: att.data.target.epoch,
+                                    root: bytes(att.data.target.root),
+                                },
+                            },
+                            signature: bytes(att.signature),
+                        };
+                    }),
+                ],
+            },
+        },
+        signature: bytes(block.signature),
+    });
+
+    return {
+        hash,
+        cell: SignedBeaconBlockToCell(block),
+    };
+}
+
+function SignedBeaconBlockToCell<
+    T extends {
+        message: IBeaconMessage;
+        signature: string;
+    }
+>(value: T) {
+    return beginCell()
+        .storeUint(Opcodes.type__container, 32)
+        .storeRef(BeaconBlockMessageToCell(value.message, BLSSignatureToCell(value.signature)))
+        .endCell();
+}
+
+function BeaconBlockMessageToCell<T extends IBeaconMessage>(value: T, leaf?: Cell) {
+    let builder = beginCell()
+        .storeUint(Opcodes.type__container, 32)
+        .storeRef(
+            SSZUintToCell(
+                value.slot,
+                8,
+                true,
+                SSZUintToCell(
+                    value.proposer_index,
+                    8,
+                    false,
+                    SSZRootToCell(
+                        value.parent_root,
+                        SSZRootToCell(
+                            value.state_root,
+                            beginCell()
+                                .storeUint(Opcodes.type__container, 32)
+                                .storeRef(
+                                    BLSSignatureToCell(
+                                        value.body.randao_reveal,
+                                        beginCell()
+                                            .storeUint(Opcodes.type__container, 32)
+                                            .storeRef(
+                                                SSZRootToCell(
+                                                    value.body.eth1_data.deposit_root,
+                                                    SSZUintToCell(
+                                                        value.body.eth1_data.deposit_count,
+                                                        8,
+                                                        false,
+                                                        SSZRootToCell(value.body.eth1_data.block_hash)
+                                                    )
+                                                )
+                                            )
+                                            .storeRef(
+                                                SSZRootToCell(
+                                                    value.body.graffiti,
+                                                    beginCell()
+                                                        .storeUint(Opcodes.type__list, 32)
+                                                        .storeUint(MAX_PROPOSER_SLASHINGS, 64)
+                                                        .storeBit(true)
+                                                        .storeRef(
+                                                            beginCell().storeUint(Opcodes.type__empty, 32).endCell()
+                                                        )
+                                                        .storeRef(
+                                                            beginCell()
+                                                                .storeUint(Opcodes.type__list, 32)
+                                                                .storeUint(MAX_ATTESTER_SLASHINGS, 64)
+                                                                .storeBit(true)
+                                                                .storeRef(
+                                                                    beginCell()
+                                                                        .storeUint(Opcodes.type__empty, 32)
+                                                                        .endCell()
+                                                                )
+                                                                .storeRef(
+                                                                  SSZAttestationsToCell(value.body.attestations)
+                                                                )
+                                                        )
+                                                        .endCell()
+                                                )
+                                            )
+                                            .endCell()
+                                    )
+                                )
+
+                                .endCell()
+                        )
+                    )
+                )
+            )
+        );
+
+    if (leaf) {
+        builder = builder.storeRef(leaf);
+    }
+
+    return builder.endCell();
+}
+
+function SSZUintToCell(value: number, size: number, isInf: boolean, tail?: Cell) {
+    let builder = beginCell()
+        .storeUint(Opcodes.type__uint, 32)
+        .storeBit(isInf)
+        .storeUint(size, 16)
+        .storeUint(value, size * 8);
+
+    if (tail) {
+        builder = builder.storeRef(tail);
+    }
+
+    return builder.endCell();
+}
+
+function BLSSignatureToCell(value: string, tail?: Cell) {
+    return SSZByteVectorTypeToCell(value, 96, BLSSignature.maxChunkCount, tail);
+}
+
+function SSZRootToCell(value: string, tail?: Cell) {
+    return SSZByteVectorTypeToCell(value, 32, Root.maxChunkCount, tail);
+}
+
+function SSZByteVectorTypeToCell(value: string, size: number, maxChunks: number, tail?: Cell) {
+    const signatureString = value.startsWith('0x') ? value.replace('0x', '') : value;
+    const uint8Arr = Uint8Array.from(Buffer.from(signatureString, 'hex'));
+
+    const chunks = splitIntoRootChunks(uint8Arr)
+        .reverse()
+        .map((chunk: any) => beginCell().storeBuffer(Buffer.from(chunk)))
+        .reduce((acc, memo, index) => {
+            if (index === 0) {
+                return memo.endCell();
+            }
+
+            return memo.storeRef(acc).endCell();
+        }, undefined as any as Cell);
+
+    let builder = beginCell()
+        .storeUint(Opcodes.type__byteVector, 32)
+        .storeUint(maxChunks, 32)
+        .storeUint(size, 64)
+        .storeRef(chunks);
+
+    if (tail) {
+        builder = builder.storeRef(tail);
+    }
+
+    return builder.endCell();
+}
+
+function SSZAttestationsToCell(value: IBeaconMessage['body']['attestations'], tail?: Cell) {
+  const listChildren = value.reverse().reduce((acc, memo, index)=> {
+    if (index === 0) {
+      return SSZAttestationToCell(memo);
+    }
+    return SSZAttestationToCell(memo, acc);
+  }, undefined as any as Cell)
+
+  let builder = beginCell()
+    .storeUint(Opcodes.type__list, 32)
+    .storeUint(MAX_ATTESTATIONS, 64)
+    .storeBit(false)
+    .storeRef(listChildren);
+
+    if (tail) {
+        builder = builder.storeRef(tail);
+    }
+
+    return builder.endCell();
+}
+
+type ArrayElement<ArrayType extends readonly unknown[]> =
+  ArrayType extends readonly (infer ElementType)[] ? ElementType : never;
+
+function SSZAttestationToCell(value: ArrayElement<IBeaconMessage['body']['attestations']>, tail?: Cell) {
+
+  const sigCell = BLSSignatureToCell(value.signature);
+  const dataCell = SSZAttestationDataToCell(value.data, sigCell);
+  const aggregationBitsCell = SSZBitListToCell(value.aggregation_bits, MAX_VALIDATORS_PER_COMMITTEE, dataCell);
+
+
+  let builder = beginCell()
+  .storeUint(Opcodes.type__container, 32)
+  .storeRef(
+    aggregationBitsCell
+  );
+
+  if(tail) {
+    builder = builder.storeRef(tail);
+  }
+
+  return builder.endCell();
+}
+
+function SSZAttestationDataToCell(value: ArrayElement<IBeaconMessage['body']['attestations']>['data'], tail?: Cell) {
+  const targetCell = SSZCheckpointToCell(value.target);
+  const sourceCell = SSZCheckpointToCell(value.source, targetCell);
+  const beaconBlockRootCell = SSZRootToCell(value.beacon_block_root, sourceCell);
+  const indexCell = SSZUintToCell(value.index, 8, false, beaconBlockRootCell);
+  const slotCell = SSZUintToCell(value.slot, 8, true, indexCell);
+
+  let builder = beginCell()
+  .storeUint(Opcodes.type__container, 32)
+  .storeRef(slotCell)
+
+
+  if(tail) {
+    builder = builder.storeRef(tail);
+  }
+
+  return builder.endCell();
+}
+
+function SSZCheckpointToCell<T extends {
+  epoch: number;
+  root: string;
+}>(value: T, tail?: Cell) {
+  const rootCell = SSZRootToCell(value.root);
+  const epochCell = SSZUintToCell(value.epoch, 8, true, rootCell);
+
+  let builder = beginCell()
+  .storeUint(Opcodes.type__container, 32)
+  .storeRef(epochCell)
+
+
+  if(tail) {
+    builder = builder.storeRef(tail);
+  }
+
+  return builder.endCell();
+
+}
+
+function SSZBitListToCell(value: string, bitLimit: number, tail?: Cell) {
+  const bitString = value.startsWith('0x') ? value.replace('0x', '') : value;
+    const uint8Arr = Uint8Array.from(Buffer.from(bitString, 'hex'));
+
+    const chunks = splitIntoRootChunks(uint8Arr)
+        .reverse()
+        .map((chunk: any) => beginCell().storeBuffer(Buffer.from(chunk)))
+        .reduce((acc, memo, index) => {
+            if (index === 0) {
+                return memo.endCell();
+            }
+
+            return memo.storeRef(acc).endCell();
+        }, undefined as any as Cell);
+
+  let builder = beginCell()
+  .storeUint(Opcodes.type__bitlist, 32)
+  .storeUint(bitLimit, 128)
+  .storeUint(stringToBitArray(value).bitLen, 256)
+  .storeRef(chunks)
+
+
+  if(tail) {
+    builder = builder.storeRef(tail);
+  }
+
+  return builder.endCell();
+}

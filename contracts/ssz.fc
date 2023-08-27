@@ -17,6 +17,7 @@ const type::byteList = "type::byteList"c;
 const type::list = "type::list"c;
 const type::vector = "type::vector"c;
 const type::container = "type::container"c;
+const type::empty = "type::empty"c;
 
 ;; ;; basic
 ;; hashTreeRoot(value: V): Uint8Array {
@@ -216,6 +217,73 @@ const type::container = "type::container"c;
     .end_cell().begin_parse());
   }
 
+  if (data_type == type::list) {
+    cell fields = cs~load_ref();
+    tuple chunks = empty_tuple();
+    int valueLength = cs~load_uint(64);
+    int isEmpty = cs~load_uint(1);
+
+    int count = 0;
+    if (isEmpty == 0) {
+      slice fields_slice = fields.begin_parse();
+
+      slice field_res = fields_slice~hashTreeRoot();
+      int field_hash = field_res~load_uint(32 * 8);
+      chunks = cons(field_hash, chunks);
+      count += 1;
+
+      while (fields_slice.slice_refs_empty?() == 0) {
+        fields = fields_slice~load_ref();
+        fields_slice = fields.begin_parse();
+
+        slice field_res = fields_slice~hashTreeRoot();
+        int field_hash = field_res~load_uint(32 * 8);
+
+        chunks = cons(field_hash, chunks);
+        count += 1;
+      }
+    }
+
+    int res = merkleize(chunks, valueLength, count);
+    res = mix_in_length(res, count);
+
+    cell log_body = begin_cell()
+        .store_uint(0x9999, 16)
+        .store_uint(res, 32 * 8)
+
+        .end_cell();
+
+    emit_log_simple(log::wrap, log_body, 0);
+
+    return (cs, begin_cell()
+    .store_uint(res, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
+  if (data_type == type::bitList) {
+    int bitLimit = cs~load_uint(128);
+    int bitLen = cs~load_uint(256);
+    cell start = cs~load_ref();
+
+    int count = 0;
+    tuple filled = fill_tuple(empty_tuple(), start, count);
+    count = filled~list_next();
+
+    int valueLength = (bitLimit / 8) / 32;
+    int res = merkleize(filled, valueLength, count);
+    res = mix_in_length(res, bitLen);
+
+    return (cs, begin_cell()
+    .store_uint(res, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
+  if (data_type == type::empty) {
+    return (cs, begin_cell()
+    .store_uint(0, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
   throw(1111);
   return (cs, begin_cell().end_cell().begin_parse());
 }
@@ -241,7 +309,6 @@ const type::container = "type::container"c;
       slice data_slice = data.begin_parse();
 
       slice res = data_slice~hashTreeRoot();
-
 
       cell log_body = begin_cell()
         ;; .store_uint(res, 32)

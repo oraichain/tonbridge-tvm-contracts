@@ -16,7 +16,10 @@ export const Opcodes = {
 
   type__byteVector: 0x8f2cdfd8,
   type__bytelist: 0x31ffdd28,
-  type__container: 0x81706e6d
+  type__container: 0x81706e6d,
+  type__list: 0x1e0a6920,
+  type__empty: 0x409f47cb,
+  type__bitlist: 0x501abea0
 };
 
 export class SSZContract implements Contract {

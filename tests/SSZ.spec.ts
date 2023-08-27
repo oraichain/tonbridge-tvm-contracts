@@ -1,4 +1,4 @@
-import {ByteListType, ByteVectorType, ContainerType, UintNumberType} from '@chainsafe/ssz';
+import {ByteListType, ByteVectorType, ContainerType, ListCompositeType, UintNumberType, } from '@chainsafe/ssz';
 import {splitIntoRootChunks} from '@chainsafe/ssz/lib/util/merkleize';
 import {compile} from '@ton-community/blueprint';
 import {Blockchain, SandboxContract} from '@ton-community/sandbox';
@@ -6,9 +6,14 @@ import '@ton-community/test-utils';
 import {Cell, beginCell, toNano} from 'ton-core';
 import {bytes} from '../evm-data/utils';
 import {Opcodes, SSZContract} from '../wrappers/SSZ';
+import {buildBlockCell} from './ssz';
+import {MAX_PROPOSER_SLASHINGS, ProposerSlashing} from './ssz/ssz-beacon-type';
 
 const Bytes96 = new ByteVectorType(96);
 const BLSSignature = Bytes96;
+const MAX_BYTES_PER_TRANSACTION = 1073741824;
+const MAX_TRANSACTIONS_PER_PAYLOAD = 1048576;
+const tx = new ListCompositeType(new ByteListType(MAX_BYTES_PER_TRANSACTION), MAX_TRANSACTIONS_PER_PAYLOAD);
 
 const blsSignature = '0x912c3615f69575407db9392eb21fee18fff797eeb2fbe1816366ca2a08ae574d8824dbfafb4c9eaa1cf61b63c6f9b69911f269b664c42947dd1b53ef1081926c1e82bb2a465f927124b08391a5249036146d6f3f1e17ff5f162f779746d830d1';
 
@@ -173,21 +178,13 @@ describe('SSZContract', () => {
         }),
         signature: BLSSignature,
     });
-    // const sszBuilder = new ContainerType({
-    //     slot: new UintNumberType(8, {clipInfinity: true})
-    // })
 
-    console.log('sign', BLSSignature.maxChunkCount, BLSSignature.maxSize);
-    console.log(sszBuilder.maxChunkCount);
     console.log(Buffer.from(sszBuilder.hashTreeRoot({
         message: {
             slot: 16
         },
         signature: bytes(blsSignature)
     })).toString('hex') );
-    // console.log(Buffer.from(sszBuilder.hashTreeRoot({
-    //     slot: 16
-    // })).toString('hex') );
 
     let chunks = splitIntoRootChunks(
         Uint8Array.from(Buffer.from(blsSignature.replace('0x', ''), 'hex'))
@@ -239,4 +236,34 @@ describe('SSZContract', () => {
         success: true,
     });
 });
+
+it('should return correct hash of beacon block', async () => {
+    const user = await blockchain.treasury('user');
+    const {hash, cell} = buildBlockCell();
+
+    const sszRes = await sszContract.sendSSZ(user.getSender(), {
+        value: toNano('1.5'),
+        data: cell
+    })
+
+    const ttt = new ListCompositeType(ProposerSlashing, MAX_PROPOSER_SLASHINGS);
+    console.log('void list hash: ', Buffer.from(ttt.hashTreeRoot([])).toString('hex'));
+
+    console.log(sszRes.transactions.map(t => t.vmLogs));
+    const externalOutBodySlice = sszRes.externals.map(ex => ex.body.asSlice());
+    console.log(externalOutBodySlice);
+    const hashToString = Buffer.from(hash).toString('hex');
+    const contractResToString = externalOutBodySlice[externalOutBodySlice.length - 1].loadBuffer(32).toString('hex');
+
+    console.log(hashToString, contractResToString)
+
+    expect(sszRes.transactions).toHaveTransaction({
+        from: user.address,
+        to: sszContract.address,
+        success: true,
+    });
+
+    expect(contractResToString).toEqual(hashToString);
+})
+
 });

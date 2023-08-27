@@ -72,7 +72,23 @@ int bitLength(int n) impure {
 
 (int) merkleize(tuple chunks, int padFor, int count) impure {
   int layerCount = bitLength(nextPowerOf2(padFor) - 1);
+  cell log_body = begin_cell()
+        .store_uint(padFor, 32)
+        .store_uint(0x9119, 16)
+        .store_uint(layerCount, 32)
+        .store_uint(count, 32)
+        ;; .store_slice(res)
+        .end_cell();
+
+        emit_log_simple(log::wrap, log_body, 0);
+
   if (count == 0) {
+    cell log_body = begin_cell()
+        .store_uint(zeroHash(layerCount), 32 * 8)
+
+        .end_cell();
+
+        emit_log_simple(log::wrap, log_body, 0);
     return zeroHash(layerCount);
   }
 
