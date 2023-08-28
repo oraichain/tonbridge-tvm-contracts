@@ -278,6 +278,24 @@ const type::empty = "type::empty"c;
     .end_cell().begin_parse());
   }
 
+  if (data_type == type::bitVector) {
+    int bitLimit = cs~load_uint(128);
+    ;; int bitLen = cs~load_uint(256);
+    cell start = cs~load_ref();
+
+    int count = 0;
+    tuple filled = fill_tuple(empty_tuple(), start, count);
+    count = filled~list_next();
+
+    int valueLength = (bitLimit / 8) / 32;
+    int res = merkleize(filled, valueLength, count);
+    ;; res = mix_in_length(res, bitLen);
+
+    return (cs, begin_cell()
+    .store_uint(res, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
   if (data_type == type::empty) {
     return (cs, begin_cell()
     .store_uint(0, 32 * 8)

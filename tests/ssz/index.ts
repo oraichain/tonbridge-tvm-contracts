@@ -7,11 +7,14 @@ import {
   BLSSignature,
   MAX_ATTESTATIONS,
   MAX_ATTESTER_SLASHINGS,
+  MAX_DEPOSITS,
   MAX_PROPOSER_SLASHINGS,
   MAX_VALIDATORS_PER_COMMITTEE,
+  MAX_VOLUNTARY_EXITS,
   Root,
+  SYNC_COMMITTEE_SIZE,
   SignedBeaconBlock,
-  stringToBitArray,
+  stringToBitArray
 } from './ssz-beacon-type';
 
 interface IBeaconMessage {
@@ -30,6 +33,10 @@ interface IBeaconMessage {
         proposer_slashings: any[];
         attester_slashings: any[];
         attestations: typeof blockJson.data.message.body.attestations;
+        deposits: any[];
+        voluntary_exits: any[];
+        sync_aggregate: typeof blockJson.data.message.body.sync_aggregate;
+        execution_payload: typeof blockJson.data.message.body.execution_payload;
     };
 }
 
@@ -76,6 +83,30 @@ export function buildBlockCell() {
                         };
                     }),
                 ],
+                deposits: block.message.body.deposits,
+                voluntary_exits: block.message.body.voluntary_exits,
+                sync_aggregate: {
+                  sync_committee_bits: stringToBitArray(block.message.body.sync_aggregate.sync_committee_bits),
+                  sync_committee_signature: bytes(block.message.body.sync_aggregate.sync_committee_signature)
+                },
+                execution_payload: {
+                  parent_hash: bytes(block.message.body.execution_payload.parent_hash),
+                  fee_recipient: bytes(block.message.body.execution_payload.fee_recipient),
+                  state_root: bytes(block.message.body.execution_payload.state_root),
+                  receipts_root: bytes(block.message.body.execution_payload.receipts_root),
+                  logs_bloom: bytes(block.message.body.execution_payload.logs_bloom),
+                  prev_randao: bytes(block.message.body.execution_payload.prev_randao),
+                  block_number: block.message.body.execution_payload.block_number,
+                  gas_limit: block.message.body.execution_payload.gas_limit,
+                  gas_used: block.message.body.execution_payload.gas_used,
+                  timestamp: block.message.body.execution_payload.timestamp,
+                  extra_data: bytes(block.message.body.execution_payload.extra_data),
+                  base_fee_per_gas: BigInt(block.message.body.execution_payload.base_fee_per_gas),
+                  block_Hash: bytes(block.message.body.execution_payload.block_hash),
+                  transactions: block.message.body.execution_payload.transactions.map(bytes)
+                  // bec521ab86a14d3d059af878a296e2f321b4d7b0602998571d30eee995601ab5
+                  // transactions: Transactions.hashTreeRoot(block.message.body.execution_payload.transactions.map(bytes))
+                }
             },
         },
         signature: bytes(block.signature),
@@ -154,7 +185,44 @@ function BeaconBlockMessageToCell<T extends IBeaconMessage>(value: T, leaf?: Cel
                                                                         .endCell()
                                                                 )
                                                                 .storeRef(
-                                                                  SSZAttestationsToCell(value.body.attestations)
+                                                                  SSZAttestationsToCell(value.body.attestations,
+                                                                      beginCell()
+                                                                        .storeUint(Opcodes.type__list, 32)
+                                                                        .storeUint(MAX_DEPOSITS, 64)
+                                                                        .storeBit(true)
+                                                                        .storeRef(
+                                                                          beginCell()
+                                                                              .storeUint(Opcodes.type__empty, 32)
+                                                                              .endCell()
+                                                                        )
+                                                                        .storeRef(
+                                                                          beginCell()
+                                                                            .storeUint(Opcodes.type__list, 32)
+                                                                            .storeUint(MAX_VOLUNTARY_EXITS, 64)
+                                                                            .storeBit(true)
+                                                                            .storeRef(
+                                                                              beginCell()
+                                                                                  .storeUint(Opcodes.type__empty, 32)
+                                                                                  .endCell()
+                                                                            )
+                                                                            .storeRef(
+                                                                              beginCell()
+                                                                              .storeUint(Opcodes.type__container, 32)
+                                                                              .storeRef(
+                                                                                SSZBitVectorToCell(
+                                                                                  value.body.sync_aggregate.sync_committee_bits,
+                                                                                  SYNC_COMMITTEE_SIZE,
+                                                                                  BLSSignatureToCell(value.body.sync_aggregate.sync_committee_signature)
+                                                                                  )
+                                                                              )
+                                                                              // .storeRef()
+                                                                              .endCell()
+
+                                                                            )
+                                                                          .endCell()
+                                                                        )
+                                                                      .endCell()
+                                                                    )
                                                                 )
                                                         )
                                                         .endCell()
@@ -330,6 +398,35 @@ function SSZBitListToCell(value: string, bitLimit: number, tail?: Cell) {
   .storeUint(Opcodes.type__bitlist, 32)
   .storeUint(bitLimit, 128)
   .storeUint(stringToBitArray(value).bitLen, 256)
+  .storeRef(chunks)
+
+
+  if(tail) {
+    builder = builder.storeRef(tail);
+  }
+
+  return builder.endCell();
+}
+
+function SSZBitVectorToCell(value: string, bitLimit: number, tail?: Cell) {
+  const bitString = value.startsWith('0x') ? value.replace('0x', '') : value;
+    const uint8Arr = Uint8Array.from(Buffer.from(bitString, 'hex'));
+
+    const chunks = splitIntoRootChunks(uint8Arr)
+        .reverse()
+        .map((chunk: any) => beginCell().storeBuffer(Buffer.from(chunk)))
+        .reduce((acc, memo, index) => {
+            if (index === 0) {
+                return memo.endCell();
+            }
+
+            return memo.storeRef(acc).endCell();
+        }, undefined as any as Cell);
+
+  let builder = beginCell()
+  .storeUint(Opcodes.type__bitVector, 32)
+  .storeUint(bitLimit, 128)
+  // .storeUint(stringToBitArray(value).bitLen, 256)
   .storeRef(chunks)
 
 
