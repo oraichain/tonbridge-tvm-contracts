@@ -1,3 +1,4 @@
+import {ByteListType, ByteVectorType} from '@chainsafe/ssz';
 import {splitIntoRootChunks} from '@chainsafe/ssz/lib/util/merkleize';
 import {Cell, beginCell} from 'ton-core';
 import {bytes} from '../../evm-data/utils';
@@ -5,15 +6,20 @@ import {Opcodes} from '../../wrappers/SSZ';
 import blockJson from './beacon-block.json';
 import {
   BLSSignature,
+  BYTES_PER_LOGS_BLOOM,
+  Bytes20,
   MAX_ATTESTATIONS,
   MAX_ATTESTER_SLASHINGS,
   MAX_DEPOSITS,
+  MAX_EXTRA_DATA_BYTES,
   MAX_PROPOSER_SLASHINGS,
   MAX_VALIDATORS_PER_COMMITTEE,
   MAX_VOLUNTARY_EXITS,
   Root,
   SYNC_COMMITTEE_SIZE,
   SignedBeaconBlock,
+  Transactions,
+  UintBn256,
   stringToBitArray
 } from './ssz-beacon-type';
 
@@ -215,7 +221,7 @@ function BeaconBlockMessageToCell<T extends IBeaconMessage>(value: T, leaf?: Cel
                                                                                   BLSSignatureToCell(value.body.sync_aggregate.sync_committee_signature)
                                                                                   )
                                                                               )
-                                                                              // .storeRef()
+                                                                              .storeRef(SSZExecutionPayloadToCell(value.body.execution_payload))
                                                                               .endCell()
 
                                                                             )
@@ -282,6 +288,10 @@ function SSZByteVectorTypeToCell(value: string, size: number, maxChunks: number,
 
             return memo.storeRef(acc).endCell();
         }, undefined as any as Cell);
+
+        console.log('value', value);
+        console.log('uint8arr', uint8Arr);
+        console.log('chunks:',chunks);
 
     let builder = beginCell()
         .storeUint(Opcodes.type__byteVector, 32)
@@ -429,6 +439,68 @@ function SSZBitVectorToCell(value: string, bitLimit: number, tail?: Cell) {
   // .storeUint(stringToBitArray(value).bitLen, 256)
   .storeRef(chunks)
 
+
+  if(tail) {
+    builder = builder.storeRef(tail);
+  }
+
+  return builder.endCell();
+}
+
+function SSZByteListToCell(value: string, size: number, maxChunks: number, tail?: Cell) {
+  const signatureString = value.startsWith('0x') ? value.replace('0x', '') : value;
+  const uint8Arr = Uint8Array.from(Buffer.from(signatureString, 'hex'));
+
+  const chunks = splitIntoRootChunks(uint8Arr)
+      .reverse()
+      .map((chunk: any) => beginCell().storeBuffer(Buffer.from(chunk)))
+      .reduce((acc, memo, index) => {
+          if (index === 0) {
+              return memo.endCell();
+          }
+
+          return memo.storeRef(acc).endCell();
+      }, undefined as any as Cell);
+
+  let builder = beginCell()
+      .storeUint(Opcodes.type__bytelist, 32)
+      .storeUint(maxChunks, 32)
+      .storeUint(size, 64)
+      .storeRef(chunks);
+
+  if (tail) {
+      builder = builder.storeRef(tail);
+  }
+
+  return builder.endCell();
+}
+
+function SSZExecutionPayloadToCell(value: typeof blockJson.data.message.body.execution_payload, tail?: Cell) {
+  const transactionHash = Transactions.hashTreeRoot(value.transactions.map(bytes));
+  const transactionsCell = SSZRootToCell('0x' + Buffer.from(transactionHash).toString('hex'));
+  const blockHashCell = SSZRootToCell(value.block_hash, transactionsCell);
+  // console.log('root of fee:', Buffer.from(UintBn256.hashTreeRoot(BigInt(value.base_fee_per_gas))));
+  const baseFeePerGasCell = SSZRootToCell('0x' + Buffer.from(UintBn256.hashTreeRoot(BigInt(value.base_fee_per_gas))).toString('hex'), blockHashCell);
+  const tmp = new ByteListType(MAX_EXTRA_DATA_BYTES);
+  // const extraDataCell =  SSZByteListToCell(value.extra_data, MAX_EXTRA_DATA_BYTES, tmp.maxChunkCount);//, baseFeePerGasCell);
+  const extraDataCell = SSZRootToCell('0x' + Buffer.from(tmp.hashTreeRoot(bytes(value.extra_data))).toString('hex'), baseFeePerGasCell);
+  const timestampCell = SSZUintToCell(value.timestamp, 8, false, extraDataCell);
+  const gas_usedCell = SSZUintToCell(value.gas_used, 8, false, timestampCell);
+  const gas_limitCell = SSZUintToCell(value.gas_limit, 8, false, gas_usedCell);
+  const block_numberCell = SSZUintToCell(value.block_number, 8, false, gas_limitCell);
+  const prev_randao = SSZRootToCell(value.prev_randao, block_numberCell);
+  const tmp2 = new ByteVectorType(BYTES_PER_LOGS_BLOOM);
+  const logs_bloomCell = SSZByteVectorTypeToCell(value.logs_bloom, BYTES_PER_LOGS_BLOOM, tmp2.maxChunkCount, prev_randao);
+  const receipts_root = SSZRootToCell(value.receipts_root, logs_bloomCell);
+  const state_root = SSZRootToCell(value.state_root, receipts_root);
+  const fee_recipient = SSZByteVectorTypeToCell(value.fee_recipient, 20, Bytes20.maxChunkCount, state_root);
+  const parent_hash = SSZRootToCell(value.parent_hash, fee_recipient);
+
+
+
+  let builder = beginCell()
+  .storeUint(Opcodes.type__container, 32)
+  .storeRef(parent_hash)
 
   if(tail) {
     builder = builder.storeRef(tail);
