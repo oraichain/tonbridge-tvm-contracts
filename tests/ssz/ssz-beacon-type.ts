@@ -20,7 +20,7 @@ export const UintNum64 = new UintNumberType(8);
 export const Bytes32 = new ByteVectorType(32);
 export const Bytes20 = new ByteVectorType(20);
 export const UintBn256 = new UintBigintType(32);
-const Uint256 = UintBn256;
+export const Uint256 = UintBn256;
 
 export const BLSSignature = Bytes96;
 export const Slot = UintNumInf64;

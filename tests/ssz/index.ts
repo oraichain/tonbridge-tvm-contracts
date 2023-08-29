@@ -5,23 +5,22 @@ import {bytes} from '../../evm-data/utils';
 import {Opcodes} from '../../wrappers/SSZ';
 import blockJson from './beacon-block.json';
 import {
-  BLSSignature,
-  BYTES_PER_LOGS_BLOOM,
-  Bytes20,
-  MAX_ATTESTATIONS,
-  MAX_ATTESTER_SLASHINGS,
-  MAX_DEPOSITS,
-  MAX_EXTRA_DATA_BYTES,
-  MAX_PROPOSER_SLASHINGS,
-  MAX_VALIDATORS_PER_COMMITTEE,
-  MAX_VOLUNTARY_EXITS,
-  Root,
-  SYNC_COMMITTEE_SIZE,
-  SignedBeaconBlock,
-  Transactions,
-  UintBn256,
-  stringToBitArray
+    BYTES_PER_LOGS_BLOOM,
+    Bytes20,
+    MAX_ATTESTATIONS,
+    MAX_ATTESTER_SLASHINGS,
+    MAX_DEPOSITS,
+    MAX_EXTRA_DATA_BYTES,
+    MAX_PROPOSER_SLASHINGS,
+    MAX_VALIDATORS_PER_COMMITTEE,
+    MAX_VOLUNTARY_EXITS,
+    SYNC_COMMITTEE_SIZE,
+    SignedBeaconBlock,
+    Transactions,
+    UintBn256,
+    stringToBitArray
 } from './ssz-beacon-type';
+import {BLSSignatureToCell, SSZBitVectorToCell, SSZByteVectorTypeToCell, SSZRootToCell, SSZUintToCell} from './ssz-to-cell';
 
 interface IBeaconMessage {
     slot: number;
@@ -141,13 +140,13 @@ function BeaconBlockMessageToCell<T extends IBeaconMessage>(value: T, leaf?: Cel
         .storeUint(Opcodes.type__container, 32)
         .storeRef(
             SSZUintToCell(
-                value.slot,
-                8,
-                true,
+                {value: value.slot,
+                size: 8,
+                isInf: true},
                 SSZUintToCell(
-                    value.proposer_index,
-                    8,
-                    false,
+                    {value: value.proposer_index,
+                    size: 8,
+                    isInf: false},
                     SSZRootToCell(
                         value.parent_root,
                         SSZRootToCell(
@@ -163,9 +162,9 @@ function BeaconBlockMessageToCell<T extends IBeaconMessage>(value: T, leaf?: Cel
                                                 SSZRootToCell(
                                                     value.body.eth1_data.deposit_root,
                                                     SSZUintToCell(
-                                                        value.body.eth1_data.deposit_count,
-                                                        8,
-                                                        false,
+                                                        {value: value.body.eth1_data.deposit_count,
+                                                        size: 8,
+                                                        isInf: false},
                                                         SSZRootToCell(value.body.eth1_data.block_hash)
                                                     )
                                                 )
@@ -252,59 +251,9 @@ function BeaconBlockMessageToCell<T extends IBeaconMessage>(value: T, leaf?: Cel
     return builder.endCell();
 }
 
-function SSZUintToCell(value: number, size: number, isInf: boolean, tail?: Cell) {
-    let builder = beginCell()
-        .storeUint(Opcodes.type__uint, 32)
-        .storeBit(isInf)
-        .storeUint(size, 16)
-        .storeUint(value, size * 8);
 
-    if (tail) {
-        builder = builder.storeRef(tail);
-    }
 
-    return builder.endCell();
-}
 
-function BLSSignatureToCell(value: string, tail?: Cell) {
-    return SSZByteVectorTypeToCell(value, 96, BLSSignature.maxChunkCount, tail);
-}
-
-function SSZRootToCell(value: string, tail?: Cell) {
-    return SSZByteVectorTypeToCell(value, 32, Root.maxChunkCount, tail);
-}
-
-function SSZByteVectorTypeToCell(value: string, size: number, maxChunks: number, tail?: Cell) {
-    const signatureString = value.startsWith('0x') ? value.replace('0x', '') : value;
-    const uint8Arr = Uint8Array.from(Buffer.from(signatureString, 'hex'));
-
-    const chunks = splitIntoRootChunks(uint8Arr)
-        .reverse()
-        .map((chunk: any) => beginCell().storeBuffer(Buffer.from(chunk)))
-        .reduce((acc, memo, index) => {
-            if (index === 0) {
-                return memo.endCell();
-            }
-
-            return memo.storeRef(acc).endCell();
-        }, undefined as any as Cell);
-
-        console.log('value', value);
-        console.log('uint8arr', uint8Arr);
-        console.log('chunks:',chunks);
-
-    let builder = beginCell()
-        .storeUint(Opcodes.type__byteVector, 32)
-        .storeUint(maxChunks, 32)
-        .storeUint(size, 64)
-        .storeRef(chunks);
-
-    if (tail) {
-        builder = builder.storeRef(tail);
-    }
-
-    return builder.endCell();
-}
 
 function SSZAttestationsToCell(value: IBeaconMessage['body']['attestations'], tail?: Cell) {
   const listChildren = value.reverse().reduce((acc, memo, index)=> {
@@ -354,8 +303,8 @@ function SSZAttestationDataToCell(value: ArrayElement<IBeaconMessage['body']['at
   const targetCell = SSZCheckpointToCell(value.target);
   const sourceCell = SSZCheckpointToCell(value.source, targetCell);
   const beaconBlockRootCell = SSZRootToCell(value.beacon_block_root, sourceCell);
-  const indexCell = SSZUintToCell(value.index, 8, false, beaconBlockRootCell);
-  const slotCell = SSZUintToCell(value.slot, 8, true, indexCell);
+  const indexCell = SSZUintToCell({value: value.index, size: 8, isInf:false}, beaconBlockRootCell);
+  const slotCell = SSZUintToCell({value:value.slot, size: 8, isInf: true}, indexCell);
 
   let builder = beginCell()
   .storeUint(Opcodes.type__container, 32)
@@ -374,7 +323,7 @@ function SSZCheckpointToCell<T extends {
   root: string;
 }>(value: T, tail?: Cell) {
   const rootCell = SSZRootToCell(value.root);
-  const epochCell = SSZUintToCell(value.epoch, 8, true, rootCell);
+  const epochCell = SSZUintToCell({value: value.epoch, size: 8, isInf:true}, rootCell);
 
   let builder = beginCell()
   .storeUint(Opcodes.type__container, 32)
@@ -418,34 +367,7 @@ function SSZBitListToCell(value: string, bitLimit: number, tail?: Cell) {
   return builder.endCell();
 }
 
-function SSZBitVectorToCell(value: string, bitLimit: number, tail?: Cell) {
-  const bitString = value.startsWith('0x') ? value.replace('0x', '') : value;
-    const uint8Arr = Uint8Array.from(Buffer.from(bitString, 'hex'));
 
-    const chunks = splitIntoRootChunks(uint8Arr)
-        .reverse()
-        .map((chunk: any) => beginCell().storeBuffer(Buffer.from(chunk)))
-        .reduce((acc, memo, index) => {
-            if (index === 0) {
-                return memo.endCell();
-            }
-
-            return memo.storeRef(acc).endCell();
-        }, undefined as any as Cell);
-
-  let builder = beginCell()
-  .storeUint(Opcodes.type__bitVector, 32)
-  .storeUint(bitLimit, 128)
-  // .storeUint(stringToBitArray(value).bitLen, 256)
-  .storeRef(chunks)
-
-
-  if(tail) {
-    builder = builder.storeRef(tail);
-  }
-
-  return builder.endCell();
-}
 
 function SSZByteListToCell(value: string, size: number, maxChunks: number, tail?: Cell) {
   const signatureString = value.startsWith('0x') ? value.replace('0x', '') : value;
@@ -484,10 +406,10 @@ function SSZExecutionPayloadToCell(value: typeof blockJson.data.message.body.exe
   const tmp = new ByteListType(MAX_EXTRA_DATA_BYTES);
   // const extraDataCell =  SSZByteListToCell(value.extra_data, MAX_EXTRA_DATA_BYTES, tmp.maxChunkCount);//, baseFeePerGasCell);
   const extraDataCell = SSZRootToCell('0x' + Buffer.from(tmp.hashTreeRoot(bytes(value.extra_data))).toString('hex'), baseFeePerGasCell);
-  const timestampCell = SSZUintToCell(value.timestamp, 8, false, extraDataCell);
-  const gas_usedCell = SSZUintToCell(value.gas_used, 8, false, timestampCell);
-  const gas_limitCell = SSZUintToCell(value.gas_limit, 8, false, gas_usedCell);
-  const block_numberCell = SSZUintToCell(value.block_number, 8, false, gas_limitCell);
+  const timestampCell = SSZUintToCell({value: value.timestamp, size: 8, isInf: false}, extraDataCell);
+  const gas_usedCell = SSZUintToCell({value: value.gas_used, size: 8, isInf: false}, timestampCell);
+  const gas_limitCell = SSZUintToCell({value: value.gas_limit, size: 8, isInf:false}, gas_usedCell);
+  const block_numberCell = SSZUintToCell({value: value.block_number, size: 8, isInf:false}, gas_limitCell);
   const prev_randao = SSZRootToCell(value.prev_randao, block_numberCell);
   const tmp2 = new ByteVectorType(BYTES_PER_LOGS_BLOOM);
   const logs_bloomCell = SSZByteVectorTypeToCell(value.logs_bloom, BYTES_PER_LOGS_BLOOM, tmp2.maxChunkCount, prev_randao);

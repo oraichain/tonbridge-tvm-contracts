@@ -6,8 +6,7 @@ import '@ton-community/test-utils';
 import {Cell, beginCell, toNano} from 'ton-core';
 import {bytes} from '../evm-data/utils';
 import {Opcodes, SSZContract} from '../wrappers/SSZ';
-import {buildBlockCell} from './ssz';
-import {MAX_PROPOSER_SLASHINGS, ProposerSlashing} from './ssz/ssz-beacon-type';
+import {getTestData} from './ssz/finally_update.mock';
 
 const Bytes96 = new ByteVectorType(96);
 const BLSSignature = Bytes96;
@@ -237,17 +236,43 @@ describe('SSZContract', () => {
     });
 });
 
-it('should return correct hash of beacon block', async () => {
+// it('should return correct hash of beacon block', async () => {
+//     const user = await blockchain.treasury('user');
+//     const {hash, cell} = buildBlockCell();
+
+//     const sszRes = await sszContract.sendSSZ(user.getSender(), {
+//         value: toNano('1.5'),
+//         data: cell
+//     })
+
+//     const ttt = new ListCompositeType(ProposerSlashing, MAX_PROPOSER_SLASHINGS);
+//     console.log('void list hash: ', Buffer.from(ttt.hashTreeRoot([])).toString('hex'));
+
+//     console.log(sszRes.transactions.map(t => t.vmLogs));
+//     const externalOutBodySlice = sszRes.externals.map(ex => ex.body.asSlice());
+//     console.log(externalOutBodySlice);
+//     const hashToString = Buffer.from(hash).toString('hex');
+//     const contractResToString = externalOutBodySlice[externalOutBodySlice.length - 1].loadBuffer(32).toString('hex');
+
+//     console.log(hashToString, contractResToString)
+
+//     expect(sszRes.transactions).toHaveTransaction({
+//         from: user.address,
+//         to: sszContract.address,
+//         success: true,
+//     });
+
+//     expect(contractResToString).toEqual(hashToString);
+// })
+
+it('should return correct hash of finally update', async () => {
     const user = await blockchain.treasury('user');
-    const {hash, cell} = buildBlockCell();
+    const {expectedHash: hash, cell} = getTestData();
 
     const sszRes = await sszContract.sendSSZ(user.getSender(), {
         value: toNano('1.5'),
         data: cell
     })
-
-    const ttt = new ListCompositeType(ProposerSlashing, MAX_PROPOSER_SLASHINGS);
-    console.log('void list hash: ', Buffer.from(ttt.hashTreeRoot([])).toString('hex'));
 
     console.log(sszRes.transactions.map(t => t.vmLogs));
     const externalOutBodySlice = sszRes.externals.map(ex => ex.body.asSlice());
