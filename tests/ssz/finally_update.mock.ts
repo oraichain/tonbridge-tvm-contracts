@@ -2,27 +2,29 @@ import {ByteListType, ByteVectorType} from '@chainsafe/ssz';
 import {Cell} from 'ton-core';
 import {bytes} from '../../evm-data/utils';
 import {
-  BYTES_PER_LOGS_BLOOM,
-  Bytes20,
-  LightClientFinalityUpdate,
-  MAX_EXTRA_DATA_BYTES,
-  UintBn256,
-  executionBranch,
-  finalityBranch,
+    BYTES_PER_LOGS_BLOOM,
+    Bytes20,
+    LightClientFinalityUpdate,
+    MAX_EXTRA_DATA_BYTES,
+    UintBn256,
+    executionBranch,
+    finalityBranch,
 } from './finally_update';
 import updateJson from './finally_update.json';
 import {SYNC_COMMITTEE_SIZE, stringToBitArray} from './ssz-beacon-type';
 import {
-  BLSSignatureToCell,
-  SSZBitVectorToCell,
-  SSZByteVectorTypeToCell,
-  SSZRootToCell,
-  SSZUintToCell,
-  getSSZContainer,
+    BLSSignatureToCell,
+    SSZBitVectorToCell,
+    SSZByteVectorTypeToCell,
+    SSZRootToCell,
+    SSZUintToCell,
+    getSSZContainer,
 } from './ssz-to-cell';
 
+type BlockData =  (typeof updateJson)[0];
+
 export function getTestData() {
-    const obj = updateJson.data;
+    const obj = updateJson[0].data;
 
     return {
         json: obj,
@@ -31,7 +33,7 @@ export function getTestData() {
     };
 }
 
-export function getExpectedHash(data: typeof updateJson.data) {
+export function getExpectedHash(data: BlockData['data']) {
     return LightClientFinalityUpdate.hashTreeRoot({
         attestedHeader: {
             beacon: {
@@ -96,7 +98,7 @@ export function getExpectedHash(data: typeof updateJson.data) {
     });
 }
 
-export function getFinallyUpdateCell(data: typeof updateJson.data) {
+export function getFinallyUpdateCell(data: BlockData['data']) {
     const signatureSlotCell = SSZUintToCell({ value: +data.signature_slot, size: 8 });
     const syncAggregate = getSSZContainer(
         SSZBitVectorToCell(
@@ -118,7 +120,7 @@ export function getFinallyUpdateCell(data: typeof updateJson.data) {
     return getSSZContainer(attestedHeader);
 }
 
-export function getLightClientHeaderCell(data: typeof updateJson.data.attested_header, tail?: Cell) {
+export function getLightClientHeaderCell(data: BlockData['data']['attested_header'], tail?: Cell) {
     const executionBranch2Hash = Buffer.from(executionBranch.hashTreeRoot(data.execution_branch.map(bytes))).toString(
         'hex'
     );
@@ -139,7 +141,7 @@ export function getLightClientHeaderCell(data: typeof updateJson.data.attested_h
     return getSSZContainer(beaconContainerCell, tail);
 }
 
-export function getExecutionContainerCell(data: typeof updateJson.data.attested_header.execution, tail?: Cell) {
+export function getExecutionContainerCell(data: BlockData['data']['attested_header']['execution'], tail?: Cell) {
     const withdrawalsRootCell = SSZRootToCell(data.withdrawals_root);
     const transactionsCell = SSZRootToCell(data.transactions_root, withdrawalsRootCell);
     const blockHashCell = SSZRootToCell(data.block_hash, transactionsCell);

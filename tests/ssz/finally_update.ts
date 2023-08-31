@@ -76,6 +76,16 @@ export const ExecutionAddress = Bytes20;
 export const finalityBranch = new VectorCompositeType(Bytes32, FINALIZED_ROOT_DEPTH);
 export const executionBranch = new VectorCompositeType(Bytes32, EXECUTION_PAYLOAD_DEPTH);
 
+export const SYNC_COMMITTEE_SIZE = 512;
+
+export const SyncCommittee = new ContainerType(
+  {
+    pubkeys: new VectorCompositeType(BLSPubkey, SYNC_COMMITTEE_SIZE),
+    aggregatePubkey: BLSPubkey,
+  },
+  {typeName: "SyncCommittee", jsonCase: "eth2"}
+);
+
 export const ExecutionPayloadHeader = new ContainerType(
   {
     parentHash: Root,
