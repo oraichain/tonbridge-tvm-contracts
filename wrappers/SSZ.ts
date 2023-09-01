@@ -18,6 +18,7 @@ export const Opcodes = {
   type__bytelist: 0x31ffdd28,
   type__container: 0x81706e6d,
   type__list: 0x1e0a6920,
+  type__vector: 0x8bf90db0,
   type__empty: 0x409f47cb,
   type__bitlist: 0x501abea0,
   type__bitVector: 0xa8cd9c9c

@@ -126,22 +126,22 @@ int bitLength(int n) impure {
         begin_cell().store_uint(a,32 * 8).end_cell().begin_parse()
         ));
 
-        (tuple p, int rrr) = newChunks.tpop();
-    ;; cell log_body = begin_cell()
-    ;;     .store_uint(rrr, 32 * 8)
-    ;;     .store_ref(
-    ;;       begin_cell()
-    ;;         .store_uint(b,32 * 8)
-    ;;       .end_cell()
-    ;;     )
-    ;;     .store_ref(
-    ;;       begin_cell()
-    ;;         .store_uint(a,32 * 8)
-    ;;       .end_cell()
-    ;;     )
-    ;;   .end_cell();
+        ;; (tuple p, int rrr) = newChunks.tpop();
+        ;; cell log_body = begin_cell()
+        ;;     .store_uint(rrr, 32 * 8)
+        ;;     .store_ref(
+        ;;       begin_cell()
+        ;;         .store_uint(b,32 * 8)
+        ;;       .end_cell()
+        ;;     )
+        ;;     .store_ref(
+        ;;       begin_cell()
+        ;;         .store_uint(a,32 * 8)
+        ;;       .end_cell()
+        ;;     )
+        ;;   .end_cell();
 
-    ;; emit_log_simple(log::wrap, log_body, 0);
+        ;; emit_log_simple(log::wrap, log_body, 0);
     }
     ;; cell log_body = begin_cell()
     ;; .end_cell();
@@ -151,6 +151,13 @@ int bitLength(int n) impure {
     tuple fixedChunks = empty_tuple();
     while (newChunks.tlen() > 0) {
       int hash = newChunks~tpop();
+      ;; cell log_body = begin_cell()
+      ;;   .store_uint(0x3333, 16)
+      ;;   .store_uint(hash, 32 * 8)
+
+      ;;   .end_cell();
+
+      ;;   emit_log_simple(log::wrap, log_body, 0);
       fixedChunks = cons(hash, fixedChunks);
     }
     chunks = fixedChunks;

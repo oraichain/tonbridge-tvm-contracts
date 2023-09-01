@@ -1,4 +1,4 @@
-import {ByteListType, ByteVectorType, ContainerType, ListCompositeType, UintNumberType, } from '@chainsafe/ssz';
+import {ByteListType, ByteVectorType, ContainerType, ListCompositeType, UintNumberType, hash64, } from '@chainsafe/ssz';
 import {splitIntoRootChunks} from '@chainsafe/ssz/lib/util/merkleize';
 import {compile} from '@ton-community/blueprint';
 import {Blockchain, SandboxContract} from '@ton-community/sandbox';
@@ -6,7 +6,12 @@ import '@ton-community/test-utils';
 import {Cell, beginCell, toNano} from 'ton-core';
 import {bytes} from '../evm-data/utils';
 import {Opcodes, SSZContract} from '../wrappers/SSZ';
+import {buildBlockCell} from './ssz';
+import {EXECUTION_PAYLOAD_DEPTH, ExecutionPayloadHeader, SyncCommittee, executionBranch} from './ssz/finally_update';
+import updateJson from './ssz/finally_update.json';
 import {getTestData} from './ssz/finally_update.mock';
+import {MAX_PROPOSER_SLASHINGS, ProposerSlashing} from './ssz/ssz-beacon-type';
+import {SSZRootToCell} from './ssz/ssz-to-cell';
 
 const Bytes96 = new ByteVectorType(96);
 const BLSSignature = Bytes96;
@@ -236,34 +241,34 @@ describe('SSZContract', () => {
     });
 });
 
-// it('should return correct hash of beacon block', async () => {
-//     const user = await blockchain.treasury('user');
-//     const {hash, cell} = buildBlockCell();
+it('should return correct hash of beacon block', async () => {
+    const user = await blockchain.treasury('user');
+    const {hash, cell} = buildBlockCell();
 
-//     const sszRes = await sszContract.sendSSZ(user.getSender(), {
-//         value: toNano('1.5'),
-//         data: cell
-//     })
+    const sszRes = await sszContract.sendSSZ(user.getSender(), {
+        value: toNano('1.5'),
+        data: cell
+    })
 
-//     const ttt = new ListCompositeType(ProposerSlashing, MAX_PROPOSER_SLASHINGS);
-//     console.log('void list hash: ', Buffer.from(ttt.hashTreeRoot([])).toString('hex'));
+    const ttt = new ListCompositeType(ProposerSlashing, MAX_PROPOSER_SLASHINGS);
+    console.log('void list hash: ', Buffer.from(ttt.hashTreeRoot([])).toString('hex'));
 
-//     console.log(sszRes.transactions.map(t => t.vmLogs));
-//     const externalOutBodySlice = sszRes.externals.map(ex => ex.body.asSlice());
-//     console.log(externalOutBodySlice);
-//     const hashToString = Buffer.from(hash).toString('hex');
-//     const contractResToString = externalOutBodySlice[externalOutBodySlice.length - 1].loadBuffer(32).toString('hex');
+    console.log(sszRes.transactions.map(t => t.vmLogs));
+    const externalOutBodySlice = sszRes.externals.map(ex => ex.body.asSlice());
+    console.log(externalOutBodySlice);
+    const hashToString = Buffer.from(hash).toString('hex');
+    const contractResToString = externalOutBodySlice[externalOutBodySlice.length - 1]?.loadBuffer(32).toString('hex');
 
-//     console.log(hashToString, contractResToString)
+    console.log(hashToString, contractResToString)
 
-//     expect(sszRes.transactions).toHaveTransaction({
-//         from: user.address,
-//         to: sszContract.address,
-//         success: true,
-//     });
+    expect(sszRes.transactions).toHaveTransaction({
+        from: user.address,
+        to: sszContract.address,
+        success: true,
+    });
 
-//     expect(contractResToString).toEqual(hashToString);
-// })
+    expect(contractResToString).toEqual(hashToString);
+})
 
 it('should return correct hash of finally update', async () => {
     const user = await blockchain.treasury('user');
@@ -291,4 +296,120 @@ it('should return correct hash of finally update', async () => {
     expect(contractResToString).toEqual(hashToString);
 })
 
+it('check receipt root merkle proof', async () => {
+    const data = updateJson[0].data;
+    const expectedRoot = bytes(data.finalized_header.beacon.body_root);
+
+    const res = is_valid_merkle_branch(
+        Buffer.from(ExecutionPayloadHeader.hashTreeRoot({
+            parentHash: bytes(data.finalized_header.execution.parent_hash),
+            feeRecipient: bytes(data.finalized_header.execution.fee_recipient),
+            stateRoot: bytes(data.finalized_header.execution.state_root),
+            receiptsRoot: bytes(data.finalized_header.execution.receipts_root),
+            logsBloom: bytes(data.finalized_header.execution.logs_bloom),
+            prevRandao: bytes(data.finalized_header.execution.prev_randao),
+            blockNumber: +data.finalized_header.execution.block_number,
+            gasLimit: +data.finalized_header.execution.gas_limit,
+            gasUsed: +data.finalized_header.execution.gas_used,
+            timestamp: +data.finalized_header.execution.timestamp,
+            extraData: bytes(data.finalized_header.execution.extra_data),
+            baseFeePerGas: BigInt(data.finalized_header.execution.base_fee_per_gas),
+            blockHash: bytes(data.finalized_header.execution.block_hash),
+            transactionsRoot: bytes(data.finalized_header.execution.transactions_root),
+            withdrawalsRoot: bytes(data.finalized_header.execution.withdrawals_root),
+        })),
+        data.finalized_header.execution_branch.map(bytes),
+        data.finalized_header.execution_branch.length,
+        9,
+        expectedRoot
+    );
+
+
+    // 55 for commitee
+    const res2 = is_valid_merkle_branch(
+        Buffer.from(SyncCommittee.hashTreeRoot({
+            pubkeys: data.next_sync_committee.pubkeys.map(bytes),
+            aggregatePubkey: bytes(data.next_sync_committee.aggregate_pubkey)
+        })),
+        data.next_sync_committee_branch.map(bytes),
+        5,
+        23,
+        bytes(data.attested_header.beacon.state_root),
+    )
+
+    // const res = await verifyMerkleProof(
+    //     expectedRoot, // expected merkle root
+    //     rlp.encode(toNumber(path)), // path, which is the transsactionIndex
+    //     proof.map(bytes), // array of Buffer with the merkle-proof-data
+    //     expectedValue,
+    //     'The TransactionReceipt can not be verified'
+    // );
+
+    console.log('ok', res, res2);
+
 });
+
+it ('ssz for bytevector', async () => {
+    const user = await blockchain.treasury('user');
+    const data = updateJson[0].data;
+    const arr = data.finalized_header.execution_branch;
+    const expectedHash = executionBranch.hashTreeRoot(arr.map(bytes));
+
+
+
+    let bytesList!:Cell;
+
+    for (let i = 0; i < arr.length; i++) {
+        const elem = arr[i];
+        bytesList = SSZRootToCell(elem, bytesList);
+    }
+
+
+    const cell: Cell = beginCell()
+    .storeUint(Opcodes.type__vector, 32)
+    .storeUint(EXECUTION_PAYLOAD_DEPTH, 64)
+    .storeBit(false)
+    .storeRef(
+        bytesList
+    )
+    .endCell();
+
+    const sszRes = await sszContract.sendSSZ(user.getSender(), {
+        value: toNano('2.5'),
+        data: cell
+    })
+
+    console.log(sszRes.transactions.map(t => t.vmLogs));
+    const externalOutBodySlice = sszRes.externals.map(ex => ex.body.asSlice());
+    console.log(externalOutBodySlice);
+    const hashToString = Buffer.from(expectedHash).toString('hex');
+    const contractResToString = externalOutBodySlice[externalOutBodySlice.length - 1]?.loadBuffer(32).toString('hex');
+
+    console.log(hashToString, contractResToString);
+    console.log(executionBranch.maxChunkCount);
+
+    expect(sszRes.transactions).toHaveTransaction({
+        from: user.address,
+        to: sszContract.address,
+        success: true,
+    });
+
+    expect(contractResToString).toEqual(hashToString);
+})
+});
+
+function is_valid_merkle_branch(leaf: Buffer, branch: Buffer[], depth: number, index: number, root: Buffer) {
+    let value = leaf;
+    console.log('begin proof');
+    console.log(value.toString('hex'), root.toString('hex'))
+    for (let i = 0; i < depth; i++) {
+        console.log(value.toString('hex'), branch[i]?.toString('hex'), i)
+        if (Math.floor(index / (2 ** i) % 2)) {
+            value = Buffer.from(hash64(branch[i], value));
+        } else {
+            value = Buffer.from(hash64(value, branch[i]));
+        }
+        console.log(value.toString('hex'))
+    }
+    return value.equals(root);
+}

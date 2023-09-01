@@ -8,7 +8,7 @@ export const MAX_BLS_TO_EXECUTION_CHANGES = 16;
 export const FINALIZED_ROOT_DEPTH = 6;
 export const BLOCK_BODY_EXECUTION_PAYLOAD_DEPTH = 4;
 
-const EXECUTION_PAYLOAD_DEPTH = BLOCK_BODY_EXECUTION_PAYLOAD_DEPTH;
+export const EXECUTION_PAYLOAD_DEPTH = BLOCK_BODY_EXECUTION_PAYLOAD_DEPTH;
 
 export const Boolean = new BooleanType();
 export const Byte = new UintNumberType(1);

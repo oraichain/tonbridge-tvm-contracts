@@ -1,4 +1,3 @@
-import {hash64} from '@chainsafe/ssz';
 import {compile} from '@ton-community/blueprint';
 import {Blockchain, SandboxContract} from '@ton-community/sandbox';
 import '@ton-community/test-utils';
@@ -10,8 +9,7 @@ import {bytes, toNumber} from '../evm-data/utils';
 import {verifyMerkleProof} from '../evm-data/verify-merkle-proof';
 import {ReaderContract} from '../wrappers/ReaderContract';
 import {jsonReceipt} from './mocks';
-import {ExecutionPayloadHeader, SyncCommittee} from './ssz/finally_update';
-import updateJson from './ssz/finally_update.json';
+
 
 describe('ReaderContract', () => {
     let code: Cell;
@@ -161,78 +159,10 @@ describe('ReaderContract', () => {
         });
     });
 
-    it('check receipt root merkle proof', async () => {
-        const data = updateJson[0].data;
-        const expectedRoot = bytes(data.finalized_header.beacon.body_root);
-        const path = data.finalized_header.beacon.proposer_index;
-        const proof = data.finalized_header.execution_branch;
-        const expectedValue = null as any;
 
-        const res = is_valid_merkle_branch(
-            Buffer.from(ExecutionPayloadHeader.hashTreeRoot({
-                parentHash: bytes(data.finalized_header.execution.parent_hash),
-                feeRecipient: bytes(data.finalized_header.execution.fee_recipient),
-                stateRoot: bytes(data.finalized_header.execution.state_root),
-                receiptsRoot: bytes(data.finalized_header.execution.receipts_root),
-                logsBloom: bytes(data.finalized_header.execution.logs_bloom),
-                prevRandao: bytes(data.finalized_header.execution.prev_randao),
-                blockNumber: +data.finalized_header.execution.block_number,
-                gasLimit: +data.finalized_header.execution.gas_limit,
-                gasUsed: +data.finalized_header.execution.gas_used,
-                timestamp: +data.finalized_header.execution.timestamp,
-                extraData: bytes(data.finalized_header.execution.extra_data),
-                baseFeePerGas: BigInt(data.finalized_header.execution.base_fee_per_gas),
-                blockHash: bytes(data.finalized_header.execution.block_hash),
-                transactionsRoot: bytes(data.finalized_header.execution.transactions_root),
-                withdrawalsRoot: bytes(data.finalized_header.execution.withdrawals_root),
-            })),
-            data.finalized_header.execution_branch.map(bytes),
-            data.finalized_header.execution_branch.length,
-            9,
-            expectedRoot
-        );
-
-
-        // 55 for commitee
-        const res2 = is_valid_merkle_branch(
-            Buffer.from(SyncCommittee.hashTreeRoot({
-                pubkeys: data.next_sync_committee.pubkeys.map(bytes),
-                aggregatePubkey: bytes(data.next_sync_committee.aggregate_pubkey)
-            })),
-            data.next_sync_committee_branch.map(bytes),
-            5,
-            23,
-            bytes(data.attested_header.beacon.state_root),
-        )
-
-        // const res = await verifyMerkleProof(
-        //     expectedRoot, // expected merkle root
-        //     rlp.encode(toNumber(path)), // path, which is the transsactionIndex
-        //     proof.map(bytes), // array of Buffer with the merkle-proof-data
-        //     expectedValue,
-        //     'The TransactionReceipt can not be verified'
-        // );
-
-        console.log('ok', res, res2);
-
-    });
 });
 
-function is_valid_merkle_branch(leaf: Buffer, branch: Buffer[], depth: number, index: number, root: Buffer) {
-    let value = leaf;
-    console.log('begin proof');
-    console.log(value.toString('hex'), root.toString('hex'))
-    for (let i = 0; i < depth; i++) {
-        console.log(value.toString('hex'), branch[i]?.toString('hex'), i)
-        if (Math.floor(index / (2 ** i) % 2)) {
-            value = Buffer.from(hash64(branch[i], value));
-        } else {
-            value = Buffer.from(hash64(value, branch[i]));
-        }
-        console.log(value.toString('hex'))
-    }
-    return value.equals(root);
-}
+
 
 
 
