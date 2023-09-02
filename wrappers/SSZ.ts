@@ -10,6 +10,7 @@ export function readerContractConfigToCell(config: SSZContractConfig): Cell {
 
 export const Opcodes = {
   run_ssz: 0x86f1bcc5,
+  run_verify_receipt: 0x44b4412c,
 
   type__bool: 0xf43a7aa,
   type__uint: 0xcc771d29,
@@ -59,6 +60,26 @@ export class SSZContract implements Contract {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
                 .storeUint(Opcodes.run_ssz, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.data)
+                .endCell(),
+        });
+    }
+
+    async sendVerifyReceipt(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            queryID?: number;
+            data: Cell;
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.run_verify_receipt, 32)
                 .storeUint(opts.queryID ?? 0, 64)
                 .storeRef(opts.data)
                 .endCell(),

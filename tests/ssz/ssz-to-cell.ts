@@ -98,3 +98,19 @@ export function SSZByteVectorTypeToCell(value: string, size: number, maxChunks: 
 
   return builder.endCell();
 }
+
+export function SSZVectorToCell(body: Cell, chunkLength: number, tail?: Cell) {
+  let builder = beginCell()
+  .storeUint(Opcodes.type__vector, 32)
+  .storeUint(chunkLength, 64)
+  .storeBit(false)
+  .storeRef(
+      body
+  )
+
+  if (tail) {
+    builder = builder.storeRef(tail);
+}
+
+return builder.endCell();
+}

@@ -64,8 +64,11 @@ export async function verifyMerkleProof(
     const hash = keccak(p)
 
     // verify the hash of the node
-    if (Buffer.compare(hash, wantedHash))
+    if (Buffer.compare(hash, wantedHash)) {
+      console.log(hash.toString('hex'), wantedHash.toString('hex'))
       throw new Error('Bad proof node ' + i + ': hash mismatch')
+
+    }
 
     // create the node
     const node = lastNode = new Node(rlp.decode(p) as any)

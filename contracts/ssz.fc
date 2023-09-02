@@ -7,6 +7,7 @@ builder store_endian4(builder b, int x) asm(x b) "STULE4";
 builder store_endian8(builder b, int x) asm(x b) "STULE8";
 
 const op::run_ssz = "op::run_ssz"c; ;; create an opcode from string using the "c" prefix, this results in 0x86f1bcc5 opcode in this case
+const op::run_verify_receipt = "op::run_verify_receipt"c;
 
 const type::uint = "type::uint"c;
 const type::bool = "type::bool"c;
@@ -94,22 +95,22 @@ const type::empty = "type::empty"c;
 ;;   .end_cell().begin_parse();
 ;; }
 
-;; () is_valid_merkle_branch (slice leaf, slice branch, int depth, int index, slice root) impure {
-;;   slice value = leaf;
-;;   int powRes = 1;
+(int) is_valid_merkle_branch (int leaf, tuple branch, int depth, int index, int root) impure {
+  int value = leaf;
+  int powRes = 1;
 
-;;   repeat(depth) {
-;;     if ((index / powRes) % 2 == 1) {
-;;       value = int_to_slice(sha_hash_2(branch.pop(),value));
-;;     } else {
-;;       value = int_to_slice(sha_hash_2(value, branch.pop()));
-;;     }
-;;     branch = branch~load_ref().begin_parse();
-;;     powRes = powRes * 2;
-;;   }
+  repeat(depth) {
+    slice value_slice = begin_cell().store_uint(value, 32 * 8).end_cell().begin_parse();
+    if ((index / powRes) % 2 == 1) {
+      value = sha_hash_2(branch~tpop(),value_slice);
+    } else {
+      value = sha_hash_2(value_slice, branch~tpop());
+    }
+    powRes = powRes * 2;
+  }
 
-;;   return value == root;
-;; }
+  return (value == root) % 2;
+}
 
 (tuple) fill_tuple(tuple fill, cell data, int count) impure {
   slice cs = data.begin_parse();
@@ -404,7 +405,61 @@ const type::empty = "type::empty"c;
   return (cs, begin_cell().end_cell().begin_parse());
 }
 
+(tuple) branch_to_tuple(slice branch) impure {
+  tuple t = empty_tuple();
+  slice items = branch~load_ref().begin_parse();
 
+  while(items.slice_refs_empty?() == 0) {
+    t = t.tpush(items~load_ref().begin_parse());
+    if(items.slice_refs_empty?() == 0) {
+      items = items~load_ref().begin_parse();
+    }
+  }
+  return t;
+}
+
+() verify_receipt_root(slice cs) impure {
+  ;; skip attestedHeader body
+
+  slice attested_header = cs~load_ref().begin_parse();
+  slice attested_header_fields = attested_header~load_ref().begin_parse();
+
+  slice finalized_header = attested_header~load_ref().begin_parse();
+  slice finalized_header_fields = finalized_header~load_ref().begin_parse();
+
+  slice beacon = finalized_header_fields~load_ref().begin_parse();
+  ;; slice beacon_fields = beacon~load_ref().begin_parse();
+  slice execution = finalized_header_fields~load_ref().begin_parse();
+  (slice next_field, slice execution_ssz_hash) = hashTreeRoot(execution);
+  slice execution_fields = execution~load_ref().begin_parse();
+  slice executionBranch = execution~load_ref().begin_parse();
+
+  int execution_branch_length = 4;
+  int index = 9;
+
+  slice beacon_slot = beacon~load_ref().begin_parse();
+  slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
+  slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
+
+  slice beacon_state_root = beacon_proposer_index~load_ref().begin_parse();
+  beacon_state_root~load_ref();
+  slice beacon_body_root = beacon_state_root~load_ref().begin_parse();
+  slice beacon_body_root_data = beacon_body_root~load_ref().begin_parse();
+
+
+  int res = is_valid_merkle_branch(execution_ssz_hash~load_uint(32 * 8), branch_to_tuple(executionBranch), execution_branch_length, index, beacon_body_root_data~load_uint(32 * 8));
+
+  ;; tuple test = branch_to_tuple(executionBranch);
+
+  ;; slice res = test~tpop();
+
+  cell log_body = begin_cell()
+        ;; .store_slice(res)
+        .store_uint(res, 32)
+        .end_cell();
+
+        emit_log_simple(log::wrap, log_body, 0);
+}
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
@@ -433,6 +488,15 @@ const type::empty = "type::empty"c;
 
         emit_log_simple(log::wrap, log_body, 0);
       return();
+    }
+
+    if (op == op::run_verify_receipt) {
+      cell data = in_msg_body~load_ref();
+      slice data_slice = data.begin_parse();
+
+      verify_receipt_root(data_slice);
+
+      return ();
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw

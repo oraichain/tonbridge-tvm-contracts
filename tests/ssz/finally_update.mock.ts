@@ -4,11 +4,12 @@ import {bytes} from '../../evm-data/utils';
 import {
     BYTES_PER_LOGS_BLOOM,
     Bytes20,
+    EXECUTION_PAYLOAD_DEPTH,
+    FINALIZED_ROOT_DEPTH,
     LightClientFinalityUpdate,
     MAX_EXTRA_DATA_BYTES,
     UintBn256,
-    executionBranch,
-    finalityBranch,
+    executionBranch
 } from './finally_update';
 import updateJson from './finally_update.json';
 import {SYNC_COMMITTEE_SIZE, stringToBitArray} from './ssz-beacon-type';
@@ -18,6 +19,7 @@ import {
     SSZByteVectorTypeToCell,
     SSZRootToCell,
     SSZUintToCell,
+    SSZVectorToCell,
     getSSZContainer,
 } from './ssz-to-cell';
 
@@ -109,10 +111,19 @@ export function getFinallyUpdateCell(data: BlockData['data']) {
         signatureSlotCell
     );
 
-    const finalityBranchData = Buffer.from(finalityBranch.hashTreeRoot(data.finality_branch.map(bytes))).toString(
-        'hex'
-    );
-    const finalityBranchCell = SSZRootToCell(finalityBranchData, syncAggregate);
+    let finalityBranchData!:Cell;
+
+    for (let i = 0; i < data.finality_branch.length; i++) {
+        const elem = data.finality_branch[i];
+        finalityBranchData = SSZRootToCell(elem, finalityBranchData);
+    }
+
+    // const executionBranch2Cell = SSZVectorToCell(executionItemsCell, EXECUTION_PAYLOAD_DEPTH);
+
+    // const finalityBranchData = Buffer.from(finalityBranch.hashTreeRoot(data.finality_branch.map(bytes))).toString(
+    //     'hex'
+    // );
+    const finalityBranchCell = SSZVectorToCell(finalityBranchData, FINALIZED_ROOT_DEPTH, syncAggregate);
 
     const finalizedHeaderCell = getLightClientHeaderCell(data.finalized_header, finalityBranchCell);
     const attestedHeader = getLightClientHeaderCell(data.attested_header, finalizedHeaderCell);
@@ -124,7 +135,15 @@ export function getLightClientHeaderCell(data: BlockData['data']['attested_heade
     const executionBranch2Hash = Buffer.from(executionBranch.hashTreeRoot(data.execution_branch.map(bytes))).toString(
         'hex'
     );
-    const executionBranch2Cell = SSZRootToCell(executionBranch2Hash);
+
+    let executionItemsCell!:Cell;
+
+    for (let i = 0; i < data.execution_branch.length; i++) {
+        const elem = data.execution_branch[i];
+        executionItemsCell = SSZRootToCell(elem, executionItemsCell);
+    }
+
+    const executionBranch2Cell = SSZVectorToCell(executionItemsCell, EXECUTION_PAYLOAD_DEPTH);
 
     const executionContainerCell = getExecutionContainerCell(data.execution, executionBranch2Cell);
     const beaconContainerCell = getSSZContainer(
