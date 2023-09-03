@@ -418,7 +418,68 @@ const type::empty = "type::empty"c;
   return t;
 }
 
-() verify_receipt_root(slice cs) impure {
+(tuple) committee_branch_to_tuple(slice branch) impure {
+  tuple t = empty_tuple();
+  slice items = branch;
+
+  t = t.tpush(items);
+  while(items.slice_refs_empty?() == 0) {
+    items = items~load_ref().begin_parse();
+    t = t.tpush(items);
+  }
+  return t;
+}
+
+(int) verify_sync_comittee(slice cs, slice committee_slice, slice committee_pubs_slice) impure {
+  slice attested_header = cs~load_ref().begin_parse();
+  slice attested_header_fields = attested_header~load_ref().begin_parse();
+
+  slice finalized_header = attested_header~load_ref().begin_parse();
+  slice finalized_header_fields = finalized_header~load_ref().begin_parse();
+
+  slice beacon = attested_header_fields~load_ref().begin_parse();
+  ;; slice beacon_fields = beacon~load_ref().begin_parse();
+  slice execution = attested_header_fields~load_ref().begin_parse();
+  (slice next_field, slice execution_ssz_hash) = hashTreeRoot(execution);
+  slice execution_fields = execution~load_ref().begin_parse();
+  slice executionBranch = execution~load_ref().begin_parse();
+
+  int execution_branch_length = 5;
+  int index = 23;
+
+  slice beacon_slot = beacon~load_ref().begin_parse();
+  slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
+  slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
+
+  slice beacon_state_root = beacon_proposer_index~load_ref().begin_parse();
+  slice beacon_state_root_data = beacon_state_root~load_ref().begin_parse();
+  slice beacon_body_root = beacon_state_root~load_ref().begin_parse();
+  slice beacon_body_root_data = beacon_body_root~load_ref().begin_parse();
+
+
+
+  ;; slice res = beacon_state_root_data;
+  tuple committee_bracch_tuple = committee_branch_to_tuple(committee_slice);
+
+  int res = is_valid_merkle_branch(
+    committee_pubs_slice~load_uint(32 * 8),
+    committee_bracch_tuple,
+    execution_branch_length,
+    index,
+    beacon_state_root_data~load_uint(32 * 8));
+
+
+  cell log_body = begin_cell()
+        ;; .store_slice(res)
+        .store_uint(res, 32)
+        .end_cell();
+
+        emit_log_simple(log::wrap, log_body, 0);
+
+  return res;
+}
+
+(int) verify_receipt_root(slice cs) impure {
   ;; skip attestedHeader body
 
   slice attested_header = cs~load_ref().begin_parse();
@@ -459,6 +520,8 @@ const type::empty = "type::empty"c;
         .end_cell();
 
         emit_log_simple(log::wrap, log_body, 0);
+
+  return res;
 }
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
@@ -493,8 +556,21 @@ const type::empty = "type::empty"c;
     if (op == op::run_verify_receipt) {
       cell data = in_msg_body~load_ref();
       slice data_slice = data.begin_parse();
+      cell committee_cell = in_msg_body~load_ref();
+      slice committee_slice = committee_cell.begin_parse();
+      cell committee_pubs = in_msg_body~load_ref();
+      slice committee_pubs_slice = committee_pubs.begin_parse();
 
-      verify_receipt_root(data_slice);
+      int res1 = verify_receipt_root(data_slice);
+      int res2 = verify_sync_comittee(data_slice, committee_slice, committee_pubs_slice);
+
+      cell log_body = begin_cell()
+        .store_uint(res1, 8)
+        .store_uint(res2, 8)
+
+        .end_cell();
+
+        emit_log_simple(log::wrap, log_body, 0);
 
       return ();
     }

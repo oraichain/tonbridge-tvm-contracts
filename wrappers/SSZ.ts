@@ -73,6 +73,8 @@ export class SSZContract implements Contract {
             value: bigint;
             queryID?: number;
             data: Cell;
+            committee_branch: Cell;
+            committee_pubs_cell: Cell;
         }
     ) {
         await provider.internal(via, {
@@ -82,6 +84,8 @@ export class SSZContract implements Contract {
                 .storeUint(Opcodes.run_verify_receipt, 32)
                 .storeUint(opts.queryID ?? 0, 64)
                 .storeRef(opts.data)
+                .storeRef(opts.committee_branch)
+                .storeRef(opts.committee_pubs_cell)
                 .endCell(),
         });
     }

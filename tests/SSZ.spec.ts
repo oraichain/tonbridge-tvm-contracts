@@ -393,16 +393,44 @@ it('check receipt root merkle proof', async () => {
     //     'The TransactionReceipt can not be verified'
     // );
 
-    console.log('ok', res, res2);
+
+
+    let committee_branch_cell!: Cell;
+    for (let i = 0; i < data.next_sync_committee_branch.length; i++) {
+        const branch_item = data.next_sync_committee_branch[i];
+        if (!committee_branch_cell) {
+            committee_branch_cell = beginCell()
+            .storeBuffer(bytes(branch_item))
+            .endCell();
+        } else {
+            committee_branch_cell = beginCell()
+            .storeBuffer(bytes(branch_item))
+            .storeRef(committee_branch_cell)
+            .endCell();
+        }
+    }
+
+    const committee_pubs_hash = Buffer.from(SyncCommittee.hashTreeRoot({
+        pubkeys: data.next_sync_committee.pubkeys.map(bytes),
+        aggregatePubkey: bytes(data.next_sync_committee.aggregate_pubkey)
+    }));
+
+    const committee_pubs_cell = beginCell()
+    .storeBuffer(committee_pubs_hash)
+    .endCell();
+
 
     const user = await blockchain.treasury('user');
     const {expectedHash: hash, cell} = getTestData();
 
     const sszRes = await sszContract.sendVerifyReceipt(user.getSender(), {
         value: toNano('1.5'),
-        data: cell
+        data: cell,
+        committee_branch: committee_branch_cell,
+        committee_pubs_cell
     })
 
+    console.log('ok', res, res2);
     console.log(sszRes.transactions.map(t => t.vmLogs));
     const externalOutBodySlice = sszRes.externals.map(ex => ex.body.asSlice());
     console.log(externalOutBodySlice);
