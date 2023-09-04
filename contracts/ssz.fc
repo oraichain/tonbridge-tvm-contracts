@@ -430,6 +430,52 @@ const type::empty = "type::empty"c;
   return t;
 }
 
+(int) aggregatePubkeyHashTreeRoot(slice cs) impure {
+  int padFor = 2;
+  int count = 2;
+  tuple filled = empty_tuple();
+  int part1 = cs~load_uint(32 * 8);
+  int part2 = cs~load_uint(16 * 8) << (16 * 8);
+  filled = cons(part1, filled);
+  filled = cons(part2, filled);
+
+  ;; cell log_body = begin_cell()
+  ;;       .store_uint(part1, 32 * 8)
+  ;;       .store_uint(part2, 32 * 8)
+  ;;       .end_cell();
+
+  ;;       emit_log_simple(log::wrap, log_body, 0);
+
+  int res = merkleize(filled, padFor, count);
+  return res;
+}
+
+(int) next_sync_committee_pubkeys_hash_tree_root(slice cs) impure {
+  cell pubkeys = cs~load_dict();
+  ;; calculate hash of pubkeys
+  int i = 0;
+
+  ;; (slice pub, int key) = pubkeys.udict_get?(32,i);
+  ;; (int key, slice pub, int flag) = pubkeys.udict_get_max?(32);
+  ;; cell log_body = begin_cell()
+  ;;   .store_uint(0x010101, 32)
+  ;;   ;; .store_uint(key & 0xffff, 128)
+  ;;   .store_slice(pub)
+  ;;   .end_cell();
+
+  ;; emit_log_simple(log::wrap, log_body, 0);
+
+  repeat(512) {
+    (slice pub, int key) = pubkeys.udict_get?(32,i);
+    int hash = aggregatePubkeyHashTreeRoot(pub);
+    ;; begin_cell().store_uint(hash, 32 * 8).end_cell().begin_parse()
+    ;; pubkeys~udict_replace?(32,i,"F");
+    ;; pubkeys~udict_set(32, i, "F");
+  }
+  return 0;
+  ;; return merkelize_dict(pubkeys,2,512);
+}
+
 (int) verify_sync_comittee(slice cs, slice committee_slice, slice committee_pubs_slice) impure {
   slice attested_header = cs~load_ref().begin_parse();
   slice attested_header_fields = attested_header~load_ref().begin_parse();
@@ -560,17 +606,27 @@ const type::empty = "type::empty"c;
       slice committee_slice = committee_cell.begin_parse();
       cell committee_pubs = in_msg_body~load_ref();
       slice committee_pubs_slice = committee_pubs.begin_parse();
+      cell committee_full = in_msg_body~load_ref();
+      slice committee_full_slice = committee_full.begin_parse();
 
       int res1 = verify_receipt_root(data_slice);
       int res2 = verify_sync_comittee(data_slice, committee_slice, committee_pubs_slice);
 
+      ;; committee_full_slice~load_ref();
+      int res3 = aggregatePubkeyHashTreeRoot(committee_full_slice);
+      cell pubkeys_dict = committee_full_slice~load_ref();
+      int res4 = next_sync_committee_pubkeys_hash_tree_root(pubkeys_dict.begin_parse());
       cell log_body = begin_cell()
-        .store_uint(res1, 8)
-        .store_uint(res2, 8)
-
+        ;; .store_uint(res1, 8)
+        ;; .store_uint(res2, 8)
+        .store_uint(res4, 32 * 8)
+        ;; .store_slice(committee_full_slice)
         .end_cell();
 
         emit_log_simple(log::wrap, log_body, 0);
+
+
+
 
       return ();
     }

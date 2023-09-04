@@ -75,6 +75,7 @@ export class SSZContract implements Contract {
             data: Cell;
             committee_branch: Cell;
             committee_pubs_cell: Cell;
+            next_committee_data: Cell;
         }
     ) {
         await provider.internal(via, {
@@ -86,6 +87,7 @@ export class SSZContract implements Contract {
                 .storeRef(opts.data)
                 .storeRef(opts.committee_branch)
                 .storeRef(opts.committee_pubs_cell)
+                .storeRef(opts.next_committee_data)
                 .endCell(),
         });
     }

@@ -72,34 +72,10 @@ int bitLength(int n) impure {
 
 (int) merkleize(tuple chunks, int padFor, int count) impure {
   int layerCount = bitLength(nextPowerOf2(padFor) - 1);
-  cell log_body = begin_cell()
-        .store_uint(padFor, 32)
-        .store_uint(0x9119, 16)
-        .store_uint(layerCount, 32)
-        .store_uint(count, 32)
-        ;; .store_slice(res)
-        .end_cell();
-
-        emit_log_simple(log::wrap, log_body, 0);
 
   if (count == 0) {
-    cell log_body = begin_cell()
-        .store_uint(zeroHash(layerCount), 32 * 8)
-
-        .end_cell();
-
-        emit_log_simple(log::wrap, log_body, 0);
     return zeroHash(layerCount);
   }
-
-  cell log_body = begin_cell()
-        .store_uint(padFor, 32)
-        .store_uint(layerCount, 32)
-        .store_uint(count, 32)
-        ;; .store_slice(res)
-        .end_cell();
-
-  emit_log_simple(log::wrap, log_body, 0);
 
   int chunkCount = count;
 
@@ -126,38 +102,11 @@ int bitLength(int n) impure {
         begin_cell().store_uint(a,32 * 8).end_cell().begin_parse()
         ));
 
-        ;; (tuple p, int rrr) = newChunks.tpop();
-        ;; cell log_body = begin_cell()
-        ;;     .store_uint(rrr, 32 * 8)
-        ;;     .store_ref(
-        ;;       begin_cell()
-        ;;         .store_uint(b,32 * 8)
-        ;;       .end_cell()
-        ;;     )
-        ;;     .store_ref(
-        ;;       begin_cell()
-        ;;         .store_uint(a,32 * 8)
-        ;;       .end_cell()
-        ;;     )
-        ;;   .end_cell();
-
-        ;; emit_log_simple(log::wrap, log_body, 0);
     }
-    ;; cell log_body = begin_cell()
-    ;; .end_cell();
-
-    ;; emit_log_simple(log::wrap, log_body, 0);
 
     tuple fixedChunks = empty_tuple();
     while (newChunks.tlen() > 0) {
       int hash = newChunks~tpop();
-      ;; cell log_body = begin_cell()
-      ;;   .store_uint(0x3333, 16)
-      ;;   .store_uint(hash, 32 * 8)
-
-      ;;   .end_cell();
-
-      ;;   emit_log_simple(log::wrap, log_body, 0);
       fixedChunks = cons(hash, fixedChunks);
     }
     chunks = fixedChunks;
@@ -168,6 +117,50 @@ int bitLength(int n) impure {
 
   int res = chunks~list_next();
   return res;
+}
+
+(int) merkelize_dict(cell chunks, int padFor, int count) impure {
+  int layerCount = bitLength(nextPowerOf2(padFor) - 1);
+
+  if (count == 0) {
+    return zeroHash(layerCount);
+  }
+
+  int chunkCount = count;
+  int l = 0;
+  repeat(layerCount) {
+    int padCount = chunkCount % 2;
+    int paddedChunkCount = chunkCount + padCount;
+
+    ;; if the chunks.length is odd
+    ;; we need to push on the zero-hash of that level to merkleize that level
+    int i = 0;
+    repeat(padCount) {
+      chunks~udict_set(32,chunkCount + i, begin_cell()
+      .store_uint(zeroHash(l), 32 * 8)
+      .end_cell().begin_parse());
+      i = i + 1;
+    }
+
+    i = 0;
+    repeat (paddedChunkCount / 2) {
+      (slice a, int key) = chunks.udict_get?(32, i * 2);
+      (slice b, int key2) = chunks.udict_get?(32, (i * 2) + 1);
+      chunks~udict_set(32, i, begin_cell()
+      .store_uint(sha_hash_2(
+        a,
+        b
+        ), 32 * 8)
+      .end_cell().begin_parse());
+
+    }
+
+    chunkCount = paddedChunkCount / 2;
+    l += 1;
+  }
+
+  (slice res, int key) = chunks.udict_get?(32, 0);
+  return res~load_uint(32 * 8);
 }
 
 
