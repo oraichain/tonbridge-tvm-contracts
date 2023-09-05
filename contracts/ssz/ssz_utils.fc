@@ -142,11 +142,12 @@ int bitLength(int n) impure {
       i = i + 1;
     }
 
-    i = 0;
+    (int key, slice val, int flag) = chunks.udict_get_min?(32);
     repeat (paddedChunkCount / 2) {
-      (slice a, int key) = chunks.udict_get?(32, i * 2);
-      (slice b, int key2) = chunks.udict_get?(32, (i * 2) + 1);
-      chunks~udict_set(32, i, begin_cell()
+      int current_key = key;
+      (key, slice a,  int flag) = chunks.udict_get_next?(32, key);
+      (key, slice b,  int flag) = chunks.udict_get_next?(32, key);
+      chunks~udict_set(32, current_key, begin_cell()
       .store_uint(sha_hash_2(
         a,
         b

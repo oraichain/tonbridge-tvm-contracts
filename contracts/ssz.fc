@@ -453,7 +453,7 @@ const type::empty = "type::empty"c;
 (int) next_sync_committee_pubkeys_hash_tree_root(slice cs) impure {
   cell pubkeys = cs~load_dict();
   ;; calculate hash of pubkeys
-  int i = 0;
+  ;; int i = 0;
 
   ;; (slice pub, int key) = pubkeys.udict_get?(32,i);
   ;; (int key, slice pub, int flag) = pubkeys.udict_get_max?(32);
@@ -464,16 +464,18 @@ const type::empty = "type::empty"c;
   ;;   .end_cell();
 
   ;; emit_log_simple(log::wrap, log_body, 0);
-
-  repeat(512) {
-    (slice pub, int key) = pubkeys.udict_get?(32,i);
-    int hash = aggregatePubkeyHashTreeRoot(pub);
-    ;; begin_cell().store_uint(hash, 32 * 8).end_cell().begin_parse()
-    ;; pubkeys~udict_replace?(32,i,"F");
-    ;; pubkeys~udict_set(32, i, "F");
+  (int key, slice val, int flag) = pubkeys.udict_get_min?(32);
+  repeat(50) {
+  ;; while(flag) {
+    int tmp_key = key;
+    (key, val, flag) = pubkeys.udict_get_next?(32, key);
+    int hash = aggregatePubkeyHashTreeRoot(val);
+    slice hash_slice = begin_cell().store_uint(hash, 32 * 8).end_cell().begin_parse();
+    pubkeys~udict_set(32, tmp_key, hash_slice);
   }
-  return 0;
+  ;; return 0;
   ;; return merkelize_dict(pubkeys,2,512);
+  return merkelize_dict(pubkeys,2,50);
 }
 
 (int) verify_sync_comittee(slice cs, slice committee_slice, slice committee_pubs_slice) impure {
@@ -609,11 +611,11 @@ const type::empty = "type::empty"c;
       cell committee_full = in_msg_body~load_ref();
       slice committee_full_slice = committee_full.begin_parse();
 
-      int res1 = verify_receipt_root(data_slice);
-      int res2 = verify_sync_comittee(data_slice, committee_slice, committee_pubs_slice);
+      ;; int res1 = verify_receipt_root(data_slice);
+      ;; int res2 = verify_sync_comittee(data_slice, committee_slice, committee_pubs_slice);
 
       ;; committee_full_slice~load_ref();
-      int res3 = aggregatePubkeyHashTreeRoot(committee_full_slice);
+      ;; int res3 = aggregatePubkeyHashTreeRoot(committee_full_slice);
       cell pubkeys_dict = committee_full_slice~load_ref();
       int res4 = next_sync_committee_pubkeys_hash_tree_root(pubkeys_dict.begin_parse());
       cell log_body = begin_cell()
