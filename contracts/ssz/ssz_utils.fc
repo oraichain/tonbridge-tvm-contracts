@@ -136,24 +136,32 @@ int bitLength(int n) impure {
     ;; we need to push on the zero-hash of that level to merkleize that level
     int i = 0;
     repeat(padCount) {
-      chunks~udict_set(32,chunkCount + i, begin_cell()
+      slice zero_hash = begin_cell()
       .store_uint(zeroHash(l), 32 * 8)
-      .end_cell().begin_parse());
+      .end_cell().begin_parse();
+
+      chunks~udict_set(32, chunkCount + i, zero_hash);
       i = i + 1;
     }
 
-    (int key, slice val, int flag) = chunks.udict_get_min?(32);
+    ;; (int key, slice val, int flag) = chunks.udict_get_min?(32);
+    int key = 0;
+    int flag = -1;
     repeat (paddedChunkCount / 2) {
-      int current_key = key;
-      (key, slice a,  int flag) = chunks.udict_get_next?(32, key);
-      (key, slice b,  int flag) = chunks.udict_get_next?(32, key);
-      chunks~udict_set(32, current_key, begin_cell()
-      .store_uint(sha_hash_2(
-        a,
-        b
-        ), 32 * 8)
+      ;; int current_key = key;
+      ;; (key, slice a,  flag) = chunks.udict_get_next?(32, key);
+      ;; (key, slice b,  flag) = chunks.udict_get_next?(32, key);
+
+      (slice a, flag) = chunks.udict_get?(32, key * 2);
+      (slice b, flag) = chunks.udict_get?(32, (key * 2) + 1);
+
+      int sha_hash = sha_hash_2(a, b);
+
+      chunks~udict_set(32, key, begin_cell()
+      .store_uint(sha_hash, 32 * 8)
       .end_cell().begin_parse());
 
+      key = key + 1;
     }
 
     chunkCount = paddedChunkCount / 2;

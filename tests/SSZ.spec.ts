@@ -1,4 +1,4 @@
-import {ByteListType, ByteVectorType, ContainerType, ListCompositeType, UintNumberType, VectorCompositeType, hash64, } from '@chainsafe/ssz';
+import {ByteListType, ByteVectorType, ContainerType, ListCompositeType, UintNumberType, VectorCompositeType, hash64} from '@chainsafe/ssz';
 import {splitIntoRootChunks} from '@chainsafe/ssz/lib/util/merkleize';
 import {compile} from '@ton-community/blueprint';
 import {Blockchain, SandboxContract} from '@ton-community/sandbox';
@@ -34,7 +34,8 @@ describe('SSZContract', () => {
     let sszContract: SandboxContract<SSZContract>;
 
     beforeEach(async () => {
-        blockchain = await Blockchain.create({config: getConfig()})
+        blockchain = await Blockchain.create({config: getConfig()});
+
 
         sszContract = blockchain.openContract(SSZContract.createFromConfig({}, code));
 
@@ -442,7 +443,7 @@ it('check receipt root merkle proof', async () => {
         const {expectedHash: hash, cell} = getTestData();
 
         const sszRes = await sszContract.sendVerifyReceipt(user.getSender(), {
-            value: toNano('5.5'),
+            value: toNano('15.5'),
             data: cell,
             committee_branch: committee_branch_cell,
             committee_pubs_cell,
@@ -453,14 +454,18 @@ it('check receipt root merkle proof', async () => {
         })
 
     console.log('ok', res, res2);
-    console.log(sszRes.transactions.map(t => t.vmLogs));
-        const externalOutBodySlice = sszRes.externals.map(ex => ex.body.asSlice());
-    console.log(externalOutBodySlice);
+    const externalOutBodySlice = sszRes.externals.map(ex => ex.body.asSlice());
+
 
     console.log(splitIntoRootChunks(bytes(data.next_sync_committee.aggregate_pubkey)));
     console.log(Buffer.from(BLSPubkey.hashTreeRoot(bytes(data.next_sync_committee.aggregate_pubkey))).toString('hex'));
-    console.log(BLSPubkey.maxChunkCount, (new VectorCompositeType(BLSPubkey, SYNC_COMMITTEE_SIZE)).maxChunkCount);
-        // const hashToString = Buffer.from(hash).toString('hex');
+    console.log(BLSPubkey.maxChunkCount, Buffer.from((new VectorCompositeType(BLSPubkey, SYNC_COMMITTEE_SIZE)).hashTreeRoot(data.next_sync_committee.pubkeys.map(bytes))).toString('hex'));
+    // const pubtest = data.next_sync_committee.pubkeys.map(bytes)[511];
+    // const someHash = Buffer.from( BLSPubkey.hashTreeRoot(pubtest)).toString('hex');
+    console.log(sszRes.transactions.map(t => t.vmLogs));
+    console.log(externalOutBodySlice);
+    // console.log(pubtest.toString('hex'), someHash)
+    // const hashToString = Buffer.from(hash).toString('hex');
         // const contractResToString = externalOutBodySlice[externalOutBodySlice.length - 1]?.loadBuffer(32).toString('hex');
 
         // console.log(hashToString, contractResToString)

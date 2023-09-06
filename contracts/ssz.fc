@@ -430,7 +430,7 @@ const type::empty = "type::empty"c;
   return t;
 }
 
-(int) aggregatePubkeyHashTreeRoot(slice cs) impure {
+(int) aggregatePubkeyHashTreeRoot(slice cs, int print) impure {
   int padFor = 2;
   int count = 2;
   tuple filled = empty_tuple();
@@ -439,12 +439,15 @@ const type::empty = "type::empty"c;
   filled = cons(part1, filled);
   filled = cons(part2, filled);
 
-  ;; cell log_body = begin_cell()
-  ;;       .store_uint(part1, 32 * 8)
-  ;;       .store_uint(part2, 32 * 8)
-  ;;       .end_cell();
+  if (print) {
 
-  ;;       emit_log_simple(log::wrap, log_body, 0);
+  cell log_body = begin_cell()
+        .store_uint(part1, 32 * 8)
+        .store_uint(part2, 32 * 8)
+        .end_cell();
+
+        emit_log_simple(log::wrap, log_body, 0);
+  }
 
   int res = merkleize(filled, padFor, count);
   return res;
@@ -464,18 +467,35 @@ const type::empty = "type::empty"c;
   ;;   .end_cell();
 
   ;; emit_log_simple(log::wrap, log_body, 0);
-  (int key, slice val, int flag) = pubkeys.udict_get_min?(32);
-  repeat(50) {
+  ;; (int key, slice val, int flag) = pubkeys.udict_get_min?(32);
+  ;; slice originalKey = val;
+  int key = 0;
+  repeat(512) {
   ;; while(flag) {
-    int tmp_key = key;
-    (key, val, flag) = pubkeys.udict_get_next?(32, key);
-    int hash = aggregatePubkeyHashTreeRoot(val);
+    ;; int tmp_key = key;
+    ;; (key, val, flag) = pubkeys.udict_get_next?(32, key);
+    (slice val, int flag) = pubkeys.udict_get?(32, key);
+    int hash = aggregatePubkeyHashTreeRoot(val, 0);
     slice hash_slice = begin_cell().store_uint(hash, 32 * 8).end_cell().begin_parse();
-    pubkeys~udict_set(32, tmp_key, hash_slice);
+    pubkeys~udict_set(32, key, hash_slice);
+    key = key + 1;
   }
-  ;; return 0;
-  ;; return merkelize_dict(pubkeys,2,512);
-  return merkelize_dict(pubkeys,2,50);
+
+  (slice item, int k) = pubkeys.udict_get?(32, 511);
+
+  ;; cell log_body = begin_cell()
+  ;;   ;; .store_uint(0x010101, 32)
+  ;;   ;; .store_uint(key & 0xffff, 128)
+  ;;   ;; .store_slice(originalKey)
+  ;;   .store_uint(0x00, 16)
+  ;;   .store_slice(item)
+  ;;   ;; .store_dict(pubkeys)
+  ;;   .end_cell();
+
+  ;; emit_log_simple(log::wrap, log_body, 0);
+
+  return merkelize_dict(pubkeys, 512, 512);
+  ;; return merkelize_dict(pubkeys,2,50);
 }
 
 (int) verify_sync_comittee(slice cs, slice committee_slice, slice committee_pubs_slice) impure {
@@ -615,7 +635,7 @@ const type::empty = "type::empty"c;
       ;; int res2 = verify_sync_comittee(data_slice, committee_slice, committee_pubs_slice);
 
       ;; committee_full_slice~load_ref();
-      ;; int res3 = aggregatePubkeyHashTreeRoot(committee_full_slice);
+      ;; int res3 = aggregatePubkeyHashTreeRoot(committee_full_slice, 0);
       cell pubkeys_dict = committee_full_slice~load_ref();
       int res4 = next_sync_committee_pubkeys_hash_tree_root(pubkeys_dict.begin_parse());
       cell log_body = begin_cell()
