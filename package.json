@@ -9,6 +9,7 @@
         "test:bls": "jest tests/Bls.spec.ts",
         "test:ssz": "jest tests/SSZ.spec.ts",
         "test:bp": "npx blueprint test",
+        "test:light": "jest tests/LightClient.spec.ts",
         "build": "npx blueprint build",
         "run": "npx blueprint run",
         "create": "npx blueprint create AnotherContract",
@@ -38,8 +39,10 @@
         "@ton-community/func-js": "0.6.3-tvmbeta.1"
     },
     "dependencies": {
+        "@chainsafe/bls": "^7.1.2",
         "@chainsafe/blst": "^0.2.9",
         "@chainsafe/ssz": "^0.11.1",
+        "@lodestar/types": "^1.11.1",
         "@noble/curves": "^1.1.0"
     }
 }
