@@ -3,8 +3,9 @@
 #include "static/logs.fc";
 
 ;; BLS_AGGREGATE
-(slice) bls_aggregate(tuple data) asm "DUP TLEN EXPLODEVAR BLS_AGGREGATE";
-(int) bls_aggregate2(slice, slice, slice) asm "3 PUSHINT BLS_AGGREGATE";
+;; (slice) bls_aggregate(tuple data) asm "DUP TLEN EXPLODEVAR BLS_AGGREGATE";
+(slice) bls_aggregate(slice, slice) asm "BLS_G1_ADD";
+(int) bls_verify(slice pub, slice msg, slice sig) asm "BLS_VERIFY";
 
 const op::increase = "op::increase"c; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case
 const op::init_committee = "op::init_committee"c;
@@ -35,10 +36,10 @@ global cell pubkeys_dict;
         begin_cell()
             .store_uint(ctx_id, 32)
             .store_ref(
-                begin_cell()
+            begin_cell()
                 .store_dict(pubkeys_dict)
                 .end_cell()
-            )
+        )
             .end_cell()
     );
 }
@@ -75,25 +76,7 @@ global cell pubkeys_dict;
         pubkeys_dict = committee_slice~load_dict();
         save_data();
 
-        tuple test = empty_tuple();
-        int flag = -1;
-        (slice val, flag) = pubkeys_dict.idict_get?(32, 0);
-        (slice val1, flag) = pubkeys_dict.idict_get?(32, 1);
-        (slice val2, flag) = pubkeys_dict.idict_get?(32, 2);
 
-        test.tpush(val);
-        test.tpush(val1);
-        test.tpush(val2);
-
-        ;; slice res = bls_aggregate(test);
-        int res = bls_aggregate2(val, val1, val2);
-
-        cell log_body = begin_cell()
-        .store_uint(res, 32 * 8)
-        ;; .store_slice(res)
-        .end_cell();
-
-        emit_log_simple(log::wrap, log_body, 0);
 
         return ();
     }
@@ -104,9 +87,54 @@ global cell pubkeys_dict;
         cell committee_cell = data_slice~load_ref();
         slice committee_slice = committee_cell.begin_parse();
         pubkeys_dict = committee_slice~load_dict();
+        cell aggregate_cell = in_msg_body~load_ref();
+        slice aggregate_slice = aggregate_cell.begin_parse();
         save_data();
 
+        slice aggr_pubkey = begin_cell().end_cell().begin_parse();
 
+        (int key, slice val, int flag) = pubkeys_dict.udict_get_min?(32);
+        ;; cell log_body = begin_cell()
+        ;;         .store_uint(aggregate_slice.preload_uint(8), 32)
+        ;;         ;; .store_slice(aggr_pubkey)
+        ;;         ;; .store_ref(val)
+        ;;         .end_cell();
+
+        ;;         emit_log_simple(log::wrap, log_body, 0);
+        while (flag) {
+            ;; do something with pair key->val
+            if (aggregate_slice~load_uint(1)) {
+                if (aggr_pubkey.slice_empty?()) {
+                    aggr_pubkey = val;
+                } else {
+                    aggr_pubkey = bls_aggregate(aggr_pubkey, val);
+                }
+                ;; cell log_body = begin_cell()
+                ;; .store_uint(key, 32)
+                ;; ;; .store_slice(aggr_pubkey)
+                ;; ;; .store_ref(val)
+                ;; .end_cell();
+
+                ;; emit_log_simple(log::wrap, log_body, 0);
+            }
+
+            (key, val, flag) = pubkeys_dict.udict_get_next?(32, key);
+        }
+
+        slice sig = (aggregate_slice~load_ref()).begin_parse();
+        slice msg = (in_msg_body~load_ref()).begin_parse();
+
+        int is_signed = bls_verify(aggr_pubkey, msg, sig);
+
+
+        cell log_body = begin_cell()
+        .store_uint(is_signed & 0xF, 8 * 8)
+        ;; .store_uint(flag, 32 * 8)
+        ;; .store_slice(aggr_pubkey)
+        ;; .store_ref(val)
+        .end_cell();
+
+        emit_log_simple(log::wrap, log_body, 0);
 
         return ();
     }

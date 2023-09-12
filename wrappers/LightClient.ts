@@ -84,7 +84,9 @@ export class LightClient implements Contract {
 
             value: bigint;
             queryID?: number;
-            committee: Cell
+            committee: Cell;
+            aggregate: Cell;
+            msg: Cell;
         }
     ) {
         await provider.internal(via, {
@@ -95,6 +97,8 @@ export class LightClient implements Contract {
                 .storeUint(opts.queryID ?? 0, 64)
 
                 .storeRef(opts.committee)
+                .storeRef(opts.aggregate)
+                .storeRef(opts.msg)
                 .endCell(),
         });
     }

@@ -210,3 +210,13 @@ export const SignedBeaconBlock = new ContainerType(
   },
   {typeName: "SignedBeaconBlock", jsonCase: "eth2"}
 );
+
+export const Domain = Bytes32;
+
+export const SigningData = new ContainerType(
+  {
+    objectRoot: Root,
+    domain: Domain,
+  },
+  {typeName: "SigningData", jsonCase: "eth2"}
+);

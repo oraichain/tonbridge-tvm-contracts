@@ -1,6 +1,5 @@
-import bls from "@chainsafe/blst";
-import sszAltair from '@lodestar/types/altair';
-import ssz from '@lodestar/types/capella';
+import {PublicKey, Signature, aggregatePubkeys, verify} from '@chainsafe/blst';
+import {getUint8ByteToBitBooleanArray} from '@chainsafe/ssz';
 import {compile} from '@ton-community/blueprint';
 import {Blockchain, SandboxContract} from '@ton-community/sandbox';
 import '@ton-community/test-utils';
@@ -8,7 +7,9 @@ import {Cell, Dictionary, beginCell, toNano} from 'ton-core';
 import {bytes} from '../evm-data/utils';
 import {LightClient} from '../wrappers/LightClient';
 import {getConfig} from './config';
+import {LightClientFinalityUpdate, SyncCommittee} from './ssz/finally_update';
 import UpdatesJson from './ssz/finally_update.json';
+import {BeaconBlockHeader, SigningData} from './ssz/ssz-beacon-type';
 
 function committeeToCell(data: (typeof UpdatesJson)[0]['data']['next_sync_committee']) {
     const CommitteeContent = Dictionary.empty(Dictionary.Keys.Uint(32), Dictionary.Values.Buffer(48));
@@ -20,6 +21,17 @@ function committeeToCell(data: (typeof UpdatesJson)[0]['data']['next_sync_commit
         .storeBuffer(bytes(data.aggregate_pubkey))
         .storeRef(beginCell().storeDict(CommitteeContent).endCell())
         .endCell();
+}
+
+function syncAggregateToCell(data: (typeof UpdatesJson)[0]['data']['sync_aggregate']) {
+    return beginCell()
+    .storeBuffer(bytes(data.sync_committee_bits))
+    .storeRef(
+        beginCell()
+        .storeBuffer(bytes(data.sync_committee_signature))
+        .endCell()
+    )
+    .endCell()
 }
 
 describe('LightClient', () => {
@@ -70,21 +82,11 @@ describe('LightClient', () => {
             committee: committeeToCell(UpdatesJson[0].data.next_sync_committee),
         });
 
-        const update = ssz.ssz.LightClientFinalityUpdate.fromJson(UpdatesJson[0].data);
-
-        //  .LightClientFinalityUpdate.fromJson(UpdatesJson[0].data);
-
-        const syncCommittee = sszAltair.ssz.SyncCommittee.fromJson(UpdatesJson[0].data.next_sync_committee);
-
-        const participantPubkeys = update.syncAggregate.syncCommitteeBits
-            .intersectValues(syncCommittee.pubkeys)
-            .map((a) => bls.PublicKey.fromBytes(a));
 
 
-        console.log(participantPubkeys.map(p => p))
-        // const externalOutBodySlice = initResult.externals.map((ex) => ex.body.asSlice());
-        // console.log(externalOutBodySlice);
-        // console.log(initResult.transactions.map((t) => t.vmLogs));
+        const externalOutBodySlice = initResult.externals.map((ex) => ex.body.asSlice());
+        console.log(externalOutBodySlice);
+        console.log(initResult.transactions.map((t) => t.vmLogs));
 
         // expect(initResult.transactions).toHaveTransaction({
         //     from: user.address,
@@ -93,23 +95,71 @@ describe('LightClient', () => {
         // });
     });
 
-    // it('should should update pubkeys', async () => {
-    //     const user = await blockchain.treasury('user');
+    it('should should update pubkeys', async () => {
+        const user = await blockchain.treasury('user');
 
-    //     const initResult = await lightClient.sendInitCommittee(user.getSender(), {
-    //         value: toNano('15.05'),
-    //         committee: committeeToCell(UpdatesJson[1].data.next_sync_committee),
-    //     });
+        const update = LightClientFinalityUpdate.fromJson(UpdatesJson[1].data);
+        let fixedCommitteeBits = '';
+        update.syncAggregate.sync_committee_bits.uint8Array.forEach(el => {
+            const a = getUint8ByteToBitBooleanArray(el);
+            fixedCommitteeBits += parseInt(a.map(el => el ? 1 : 0).join(''), 2).toString(16);
+        })
 
-    //     const externalOutBodySlice = initResult.externals.map((ex) => ex.body.asSlice());
-    //     console.log(externalOutBodySlice);
-    //     console.log(initResult.transactions.map((t) => t.vmLogs));
+        const sig = Signature.fromBytes(
+            update.syncAggregate.sync_committee_signature
+        );
 
-    //     // expect(initResult.transactions).toHaveTransaction({
-    //     //     from: user.address,
-    //     //     to: lightClient.address,
-    //     //     success: true,
-    //     // });
 
-    // });
+        const objectRoot = BeaconBlockHeader.hashTreeRoot(
+            update.attestedHeader.beacon
+          );
+        const signingRoot = SigningData.hashTreeRoot({
+            objectRoot,
+            domain: bytes('0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa'),
+          });
+
+        const initResult = await lightClient.sendUpdateCommittee(user.getSender(), {
+            value: toNano('15.05'),
+            committee: committeeToCell(UpdatesJson[0].data.next_sync_committee),
+            aggregate: syncAggregateToCell({...UpdatesJson[1].data.sync_aggregate, sync_committee_bits: '0x' + fixedCommitteeBits}),
+            msg: beginCell().storeBuffer(Buffer.from(signingRoot)).endCell()
+        });
+
+        const externalOutBodySlice = initResult.externals.map((ex) => ex.body.asSlice());
+        console.log(initResult.transactions.map((t) => t.vmLogs));
+
+
+        //  .LightClientFinalityUpdate.fromJson(UpdatesJson[0].data);
+
+        const syncCommittee = SyncCommittee.fromJson(UpdatesJson[0].data.next_sync_committee);
+
+        const participantPubkeys = update.syncAggregate.sync_committee_bits
+        .intersectValues(syncCommittee.pubkeys)
+        .map((a) => PublicKey.fromBytes(a));
+
+
+
+
+        const aggPubkey = aggregatePubkeys(participantPubkeys);
+        console.log(externalOutBodySlice);
+        console.log(Buffer.from(aggPubkey.toBytes()).toString('hex'))
+
+
+
+
+        const res = verify(signingRoot, aggPubkey, sig);
+        console.log(res);
+
+        // console.log(participantPubkeys.map(p => Buffer.from(p).toString('hex')))
+
+        // expect(initResult.transactions).toHaveTransaction({
+        //     from: user.address,
+        //     to: lightClient.address,
+        //     success: true,
+        // });
+
+    });
 });
+
+
+const domain = '0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa';
