@@ -10,6 +10,7 @@ import {getConfig} from './config';
 import {LightClientFinalityUpdate, SyncCommittee} from './ssz/finally_update';
 import UpdatesJson from './ssz/finally_update.json';
 import {BeaconBlockHeader, SigningData} from './ssz/ssz-beacon-type';
+import {SSZRootToCell, SSZUintToCell, getSSZContainer} from './ssz/ssz-to-cell';
 
 function committeeToCell(data: (typeof UpdatesJson)[0]['data']['next_sync_committee']) {
     const CommitteeContent = Dictionary.empty(Dictionary.Keys.Uint(32), Dictionary.Values.Buffer(48));
@@ -118,10 +119,21 @@ describe('LightClient', () => {
             domain: bytes('0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa'),
           });
 
+          const beaconContainerCell = getSSZContainer(
+            SSZUintToCell(
+                { value: +UpdatesJson[1].data.attested_header.beacon.slot, size: 8, isInf: true },
+                SSZUintToCell(
+                    { value: +UpdatesJson[1].data.attested_header.beacon.proposer_index, size: 8, isInf: false },
+                    SSZRootToCell(UpdatesJson[1].data.attested_header.beacon.parent_root, SSZRootToCell(UpdatesJson[1].data.attested_header.beacon.state_root, SSZRootToCell(UpdatesJson[1].data.attested_header.beacon.body_root)))
+                )
+            ),
+        );
+
         const initResult = await lightClient.sendUpdateCommittee(user.getSender(), {
             value: toNano('15.05'),
             committee: committeeToCell(UpdatesJson[0].data.next_sync_committee),
             aggregate: syncAggregateToCell({...UpdatesJson[1].data.sync_aggregate, sync_committee_bits: '0x' + fixedCommitteeBits}),
+            beaconSSZ: beaconContainerCell,
             msg: beginCell().storeBuffer(Buffer.from(signingRoot)).endCell()
         });
 
@@ -149,6 +161,7 @@ describe('LightClient', () => {
 
         const res = verify(signingRoot, aggPubkey, sig);
         console.log(res);
+        console.log(Buffer.from(signingRoot).toString('hex'))
 
         // console.log(participantPubkeys.map(p => Buffer.from(p).toString('hex')))
 

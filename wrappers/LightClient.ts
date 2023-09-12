@@ -86,6 +86,7 @@ export class LightClient implements Contract {
             queryID?: number;
             committee: Cell;
             aggregate: Cell;
+            beaconSSZ: Cell;
             msg: Cell;
         }
     ) {
@@ -98,6 +99,7 @@ export class LightClient implements Contract {
 
                 .storeRef(opts.committee)
                 .storeRef(opts.aggregate)
+                .storeRef(opts.beaconSSZ)
                 .storeRef(opts.msg)
                 .endCell(),
         });

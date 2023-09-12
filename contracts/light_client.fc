@@ -1,6 +1,7 @@
 #include "imports/stdlib.fc";
 #include "utils/messages.fc";
 #include "static/logs.fc";
+#include "ssz/ssz_utils.fc";
 
 ;; BLS_AGGREGATE
 ;; (slice) bls_aggregate(tuple data) asm "DUP TLEN EXPLODEVAR BLS_AGGREGATE";
@@ -10,6 +11,8 @@
 const op::increase = "op::increase"c; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case
 const op::init_committee = "op::init_committee"c;
 const op::update_committee = "op::update_committee"c;
+
+const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa;
 
 ;; storage variables
 
@@ -89,6 +92,9 @@ global cell pubkeys_dict;
         pubkeys_dict = committee_slice~load_dict();
         cell aggregate_cell = in_msg_body~load_ref();
         slice aggregate_slice = aggregate_cell.begin_parse();
+        slice beacon_ssz = (in_msg_body~load_ref()).begin_parse();
+        slice msg = (in_msg_body~load_ref()).begin_parse();
+
         save_data();
 
         slice aggr_pubkey = begin_cell().end_cell().begin_parse();
@@ -122,15 +128,22 @@ global cell pubkeys_dict;
         }
 
         slice sig = (aggregate_slice~load_ref()).begin_parse();
-        slice msg = (in_msg_body~load_ref()).begin_parse();
 
-        int is_signed = bls_verify(aggr_pubkey, msg, sig);
 
+        (slice a, slice ssz_beacon_hash) = beacon_ssz.hashTreeRoot();
+
+        tuple chunks = empty_tuple();
+        chunks = cons(ssz_beacon_hash~load_uint(32 * 8), chunks);
+        chunks = cons(domain, chunks);
+
+        int signature_hash = merkleize(chunks, 2, 2);
+
+        int is_signed = bls_verify(aggr_pubkey, begin_cell().store_uint(signature_hash, 32 * 8).end_cell().begin_parse(), sig);
 
         cell log_body = begin_cell()
-        .store_uint(is_signed & 0xF, 8 * 8)
-        ;; .store_uint(flag, 32 * 8)
-        ;; .store_slice(aggr_pubkey)
+        ;; .store_uint(is_signed & 0xF, 8 * 8)
+        .store_uint(is_signed & 0xF, 32 * 8)
+        ;; .store_slice(beacon_ssz)
         ;; .store_ref(val)
         .end_cell();
 
