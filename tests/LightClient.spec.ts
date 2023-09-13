@@ -83,17 +83,18 @@ describe('LightClient', () => {
             committee: committeeToCell(UpdatesJson[0].data.next_sync_committee),
         });
 
-
-
         const externalOutBodySlice = initResult.externals.map((ex) => ex.body.asSlice());
+        // console.log(initResult.transactions.map((t) => t.vmLogs));
         console.log(externalOutBodySlice);
-        console.log(initResult.transactions.map((t) => t.vmLogs));
 
-        // expect(initResult.transactions).toHaveTransaction({
-        //     from: user.address,
-        //     to: lightClient.address,
-        //     success: true,
-        // });
+        // const pubkeys = await lightClient.getPubkeys();
+        // console.log(pubkeys);
+
+        expect(initResult.transactions).toHaveTransaction({
+            from: user.address,
+            to: lightClient.address,
+            success: true,
+        });
     });
 
     it('should should update pubkeys', async () => {

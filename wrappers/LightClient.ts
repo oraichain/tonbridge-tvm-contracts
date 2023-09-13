@@ -114,4 +114,9 @@ export class LightClient implements Contract {
     //     const result = await provider.get('get_id', []);
     //     return result.stack.readNumber();
     // }
+
+    async getPubkeys(provider: ContractProvider) {
+        const result = await provider.get('get_pubkeys', []);
+        return result.stack.readCell();
+    }
 }

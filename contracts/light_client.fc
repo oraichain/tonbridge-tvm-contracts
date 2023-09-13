@@ -30,6 +30,24 @@ global cell pubkeys_dict;
     slice pubs_slice = pubs_cell.begin_parse();
     pubkeys_dict = pubs_slice~load_dict();
 
+
+    ;; (int key, slice val, int flag) = pubkeys_dict.udict_get_min?(32);
+
+    ;; var ds2 = get_data().begin_parse();
+    ;; cell some_cell = ds2~load_ref();
+    ;; slice some_slice = some_cell.begin_parse();
+    ;; cell some_cell2 = some_slice~load_ref();
+
+    cell log_body = begin_cell()
+    ;; .store_uint(0x11, 8 * 8)
+    ;; .store_uint(is_signed & 0xF, 32 * 8)
+    ;; .store_slice()
+    ;; .store_ref(some_cell2)
+    .store_dict(pubkeys_dict)
+    .end_cell();
+
+    emit_log_simple(log::wrap, log_body, 0);
+
     ds.end_parse();
 }
 
@@ -45,6 +63,15 @@ global cell pubkeys_dict;
         )
             .end_cell()
     );
+
+    ;; cell log_body = begin_cell()
+    ;; .store_uint(0x11, 8 * 8)
+    ;; ;; .store_uint(is_signed & 0xF, 32 * 8)
+    ;; ;; .store_slice()
+    ;; .store_dict(pubkeys_dict)
+    ;; .end_cell();
+
+    ;; emit_log_simple(log::wrap, log_body, 0);
 }
 
 ;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
@@ -79,8 +106,6 @@ global cell pubkeys_dict;
         pubkeys_dict = committee_slice~load_dict();
         save_data();
 
-
-
         return ();
     }
 
@@ -89,39 +114,25 @@ global cell pubkeys_dict;
         slice data_slice = data.begin_parse();
         cell committee_cell = data_slice~load_ref();
         slice committee_slice = committee_cell.begin_parse();
-        pubkeys_dict = committee_slice~load_dict();
+
         cell aggregate_cell = in_msg_body~load_ref();
         slice aggregate_slice = aggregate_cell.begin_parse();
         slice beacon_ssz = (in_msg_body~load_ref()).begin_parse();
         slice msg = (in_msg_body~load_ref()).begin_parse();
-
-        save_data();
+        load_data();
 
         slice aggr_pubkey = begin_cell().end_cell().begin_parse();
 
-        (int key, slice val, int flag) = pubkeys_dict.udict_get_min?(32);
-        ;; cell log_body = begin_cell()
-        ;;         .store_uint(aggregate_slice.preload_uint(8), 32)
-        ;;         ;; .store_slice(aggr_pubkey)
-        ;;         ;; .store_ref(val)
-        ;;         .end_cell();
 
-        ;;         emit_log_simple(log::wrap, log_body, 0);
+        (int key, slice val, int flag) = pubkeys_dict.udict_get_min?(32);
+
         while (flag) {
-            ;; do something with pair key->val
             if (aggregate_slice~load_uint(1)) {
                 if (aggr_pubkey.slice_empty?()) {
                     aggr_pubkey = val;
                 } else {
                     aggr_pubkey = bls_aggregate(aggr_pubkey, val);
                 }
-                ;; cell log_body = begin_cell()
-                ;; .store_uint(key, 32)
-                ;; ;; .store_slice(aggr_pubkey)
-                ;; ;; .store_ref(val)
-                ;; .end_cell();
-
-                ;; emit_log_simple(log::wrap, log_body, 0);
             }
 
             (key, val, flag) = pubkeys_dict.udict_get_next?(32, key);
@@ -138,6 +149,19 @@ global cell pubkeys_dict;
 
         int signature_hash = merkleize(chunks, 2, 2);
 
+        cell log_body = begin_cell()
+        ;; .store_uint(is_signed & 0xF, 8 * 8)
+        ;; .store_uint(is_signed & 0xF, 32 * 8)
+        .store_slice(aggr_pubkey)
+        .store_ref(begin_cell().store_slice(sig).end_cell())
+        ;; .store_ref(begin_cell().store_slice(pubkeys_dict).end_cell())
+        ;; .store_ref(pubkeys_dict)
+        .end_cell();
+
+        emit_log_simple(log::wrap, log_body, 0);
+
+        return();
+        throw(0xffff);
         int is_signed = bls_verify(aggr_pubkey, begin_cell().store_uint(signature_hash, 32 * 8).end_cell().begin_parse(), sig);
 
         cell log_body = begin_cell()
@@ -148,6 +172,9 @@ global cell pubkeys_dict;
         .end_cell();
 
         emit_log_simple(log::wrap, log_body, 0);
+
+        pubkeys_dict = committee_slice~load_dict();
+        save_data();
 
         return ();
     }
@@ -168,3 +195,8 @@ global cell pubkeys_dict;
 ;;     load_data();
 ;;     return ctx_id;
 ;; }
+
+cell get_pubkeys() method_id {
+    load_data();
+    return pubkeys_dict;
+}
