@@ -11,6 +11,8 @@
 const op::increase = "op::increase"c; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case
 const op::init_committee = "op::init_committee"c;
 const op::update_committee = "op::update_committee"c;
+const op::update_beacon = "op::update_beacon"c;
+const op::proof_receipt_root = "op::proof_receipt"c;
 
 const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa;
 
@@ -20,6 +22,8 @@ const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0f
 ;; since addresses in TON depend on the initial state of the contract
 ;; global int ctx_id;
 global cell pubkeys_dict;
+global cell beacon;
+global int receipt_root;
 
 ;; load_data populates storage variables using stored data
 () load_data() impure {
@@ -29,6 +33,10 @@ global cell pubkeys_dict;
     cell pubs_cell = ds~load_ref();
     slice pubs_slice = pubs_cell.begin_parse();
     pubkeys_dict = pubs_slice~load_dict();
+    beacon = ds~load_ref();
+    cell receipt_root_cell = ds~load_ref();
+    slice receipt_root_slice = receipt_root_cell.begin_parse();
+    receipt_root = receipt_root_slice~load_uint(32 * 8);
 
     ds.end_parse();
 }
@@ -37,14 +45,89 @@ global cell pubkeys_dict;
 () save_data() impure {
     set_data(
         begin_cell()
-            ;; .store_uint(ctx_id, 32)
-            .store_ref(
+        .store_ref(
             begin_cell()
                 .store_dict(pubkeys_dict)
-                .end_cell()
-        )
             .end_cell()
+        )
+        .store_ref(beacon)
+        .store_ref(
+            begin_cell()
+                .store_uint(receipt_root, 32 * 8)
+            .end_cell()
+        )
+        .end_cell()
     );
+}
+
+(slice) get_aggregated_pubkey(slice aggregate_slice) impure {
+     slice aggr_pubkey = begin_cell().end_cell().begin_parse();
+     (int key, slice val, int flag) = pubkeys_dict.udict_get_min?(32);
+
+    while (flag) {
+        if (aggregate_slice~load_uint(1)) {
+            if (aggr_pubkey.slice_empty?()) {
+                aggr_pubkey = val;
+            } else {
+                aggr_pubkey = bls_aggregate(aggr_pubkey, val);
+            }
+        }
+
+        (key, val, flag) = pubkeys_dict.udict_get_next?(32, key);
+    }
+
+    return aggr_pubkey;
+}
+
+(slice) get_beacon_bls_msg() impure {
+    slice beacon_ssz = beacon.begin_parse();
+    (slice a, slice ssz_beacon_hash) = beacon_ssz.hashTreeRoot();
+
+    tuple chunks = empty_tuple();
+    chunks = cons(ssz_beacon_hash~load_uint(32 * 8), chunks);
+    chunks = cons(domain, chunks);
+
+    int signature_hash = merkleize(chunks, 2, 2);
+
+    return begin_cell().store_uint(signature_hash, 32 * 8).end_cell().begin_parse();
+}
+
+(int) verify_beacon(slice aggregate_slice, slice sig) impure {
+    slice aggr_pubkey = get_aggregated_pubkey(aggregate_slice);
+
+    int is_signed = bls_verify(aggr_pubkey, get_beacon_bls_msg(), sig);
+
+    return is_signed;
+}
+
+(int) aggregatePubkeyHashTreeRoot(slice cs) impure {
+  int padFor = 2;
+  int count = 2;
+  tuple filled = empty_tuple();
+  int part1 = cs~load_uint(32 * 8);
+  int part2 = cs~load_uint(16 * 8) << (16 * 8);
+  filled = cons(part1, filled);
+  filled = cons(part2, filled);
+
+  int res = merkleize(filled, padFor, count);
+  return res;
+}
+
+(int) next_sync_committee_pubkeys_hash_tree_root(slice cs) impure {
+  cell pubkeys = cs~load_dict();
+
+  int key = 0;
+  repeat(512) {
+    (slice val, int flag) = pubkeys.udict_get?(32, key);
+    int hash = aggregatePubkeyHashTreeRoot(val);
+    slice hash_slice = begin_cell().store_uint(hash, 32 * 8).end_cell().begin_parse();
+    pubkeys~udict_set(32, key, hash_slice);
+    key = key + 1;
+  }
+
+  (slice item, int k) = pubkeys.udict_get?(32, 511);
+
+  return merkelize_dict(pubkeys, 512, 512);
 }
 
 ;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
@@ -70,8 +153,26 @@ global cell pubkeys_dict;
         cell committee_cell = data_slice~load_ref();
         slice committee_slice = committee_cell.begin_parse();
         pubkeys_dict = committee_slice~load_dict();
+        receipt_root = 0;
         save_data();
         return ();
+    }
+
+    if (op == op::update_beacon) {
+        cell aggregate_cell = in_msg_body~load_ref();
+        slice aggregate_slice = aggregate_cell.begin_parse();
+
+        beacon = in_msg_body~load_ref();
+        slice aggr_pubkey = get_aggregated_pubkey(aggregate_slice);
+        slice sig = (aggregate_slice~load_ref()).begin_parse();
+        int is_signed = bls_verify(aggr_pubkey, get_beacon_bls_msg(), sig);
+
+        if (is_signed) {
+            receipt_root = 0;
+            save_data();
+            return();
+        }
+        throw(0xffff);
     }
 
     if (op == op::update_committee) {
@@ -79,46 +180,102 @@ global cell pubkeys_dict;
         slice data_slice = data.begin_parse();
         cell committee_cell = data_slice~load_ref();
         slice committee_slice = committee_cell.begin_parse();
+        pubkeys_dict = committee_slice~load_dict();
 
-        cell aggregate_cell = in_msg_body~load_ref();
-        slice aggregate_slice = aggregate_cell.begin_parse();
-        slice beacon_ssz = (in_msg_body~load_ref()).begin_parse();
+        cell committee_branch_cell = in_msg_body~load_ref();
+        slice committee_branch_slice = committee_branch_cell.begin_parse();
 
-        slice aggr_pubkey = begin_cell().end_cell().begin_parse();
-
-        (int key, slice val, int flag) = pubkeys_dict.udict_get_min?(32);
-
-        while (flag) {
-            if (aggregate_slice~load_uint(1)) {
-                if (aggr_pubkey.slice_empty?()) {
-                    aggr_pubkey = val;
-                } else {
-                    aggr_pubkey = bls_aggregate(aggr_pubkey, val);
-                }
-            }
-
-            (key, val, flag) = pubkeys_dict.udict_get_next?(32, key);
-        }
-
-        slice sig = (aggregate_slice~load_ref()).begin_parse();
+        tuple committee_branch_tuple = committee_branch_to_tuple(committee_branch_slice);
 
 
-        (slice a, slice ssz_beacon_hash) = beacon_ssz.hashTreeRoot();
+        int committee_aggregate_hash = aggregatePubkeyHashTreeRoot(data_slice);
+        int committee_pubkeys_hash = next_sync_committee_pubkeys_hash_tree_root(committee_cell.begin_parse());
 
         tuple chunks = empty_tuple();
-        chunks = cons(ssz_beacon_hash~load_uint(32 * 8), chunks);
-        chunks = cons(domain, chunks);
+        chunks = cons(committee_pubkeys_hash, chunks);
+        chunks = cons(committee_aggregate_hash, chunks);
+        int committee_hash = merkleize(chunks, 2, 2);
 
-        int signature_hash = merkleize(chunks, 2, 2);
+        int execution_branch_length = 5;
+        int index = 23;
 
-        int is_signed = bls_verify(aggr_pubkey, begin_cell().store_uint(signature_hash, 32 * 8).end_cell().begin_parse(), sig);
+        slice beacon_slice = beacon.begin_parse();
+        slice beacon_slot = beacon_slice~load_ref().begin_parse();
+        slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
+        slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
+        slice beacon_parent_root_data = beacon_parent_root~load_ref().begin_parse();
 
-        if (is_signed) {
-            pubkeys_dict = committee_slice~load_dict();
+        slice beacon_state_root = beacon_parent_root~load_ref().begin_parse();
+        slice beacon_state_root_data = beacon_state_root~load_ref().begin_parse();
+        slice beacon_body_root = beacon_state_root~load_ref().begin_parse();
+        slice beacon_body_root_data = beacon_body_root~load_ref().begin_parse();
+
+        int res = is_valid_merkle_branch(
+            committee_hash,
+            committee_branch_tuple,
+            execution_branch_length,
+            index,
+            beacon_state_root_data~load_uint(32 * 8)
+        );
+
+        if (res) {
+            save_data();
+            return ();
+        }
+
+        throw(0xffff);
+    }
+
+    if (op == op::proof_receipt_root) {
+        ;; throw(0x00ff);
+        cell execution = in_msg_body~load_ref();
+        cell execution_branch = in_msg_body~load_ref();
+        slice execution_slice = execution.begin_parse();
+
+        (slice tmp, slice execution_ssz_hash) = execution_slice.hashTreeRoot();
+
+        slice beacon_slice = beacon.begin_parse();
+        slice beacon_slot = beacon_slice~load_ref().begin_parse();
+        slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
+        slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
+        slice beacon_parent_root_data = beacon_parent_root~load_ref().begin_parse();
+
+        slice beacon_state_root = beacon_parent_root~load_ref().begin_parse();
+        slice beacon_state_root_data = beacon_state_root~load_ref().begin_parse();
+        slice beacon_body_root = beacon_state_root~load_ref().begin_parse();
+        slice beacon_body_root_data = beacon_body_root~load_ref().begin_parse();
+
+        int execution_branch_length = 4;
+        int index = 9;
+
+        tuple branch = committee_branch_to_tuple(execution_branch.begin_parse());
+
+        int res = is_valid_merkle_branch(
+            execution_ssz_hash~load_uint(32 * 8),
+            branch,
+            execution_branch_length,
+            index,
+            beacon_body_root_data~load_uint(32 * 8)
+        );
+
+
+
+        if (res) {
+            slice parent_hash_slice = (execution_slice~load_ref()).begin_parse();
+            parent_hash_slice~load_ref();
+            slice fee_recipient_slice = (parent_hash_slice~load_ref()).begin_parse();
+            fee_recipient_slice~load_ref();
+            slice state_root_slice = (fee_recipient_slice~load_ref()).begin_parse();
+            state_root_slice~load_ref();
+            slice receipts_root_slice = (state_root_slice~load_ref()).begin_parse();
+            slice receipts_root_data = (receipts_root_slice~load_ref()).begin_parse();
+
+            receipt_root = receipts_root_data~load_uint(32 * 8);
             save_data();
             return();
+        } else {
+            throw(0xffff);
         }
-        throw(0xffff);
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw

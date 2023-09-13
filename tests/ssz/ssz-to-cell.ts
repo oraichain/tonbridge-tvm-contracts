@@ -82,9 +82,9 @@ export function SSZByteVectorTypeToCell(value: string, size: number, maxChunks: 
           return memo.storeRef(acc).endCell();
       }, undefined as any as Cell);
 
-      console.log('value', value);
-      console.log('uint8arr', uint8Arr);
-      console.log('chunks:',chunks);
+      // console.log('value', value);
+      // console.log('uint8arr', uint8Arr);
+      // console.log('chunks:',chunks);
 
   let builder = beginCell()
       .storeUint(Opcodes.type__byteVector, 32)

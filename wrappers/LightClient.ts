@@ -6,12 +6,18 @@ export type LightClientConfig = {
 
 export function lightClientConfigToCell(config: LightClientConfig): Cell {
     const CommitteeContent = Dictionary.empty(Dictionary.Keys.Uint(32), Dictionary.Values.Buffer(48));
-    return beginCell().storeRef(beginCell().storeDict(CommitteeContent).endCell()).endCell();
+    return beginCell()
+    .storeRef(beginCell().storeDict(CommitteeContent).endCell())
+    .storeRef(beginCell().endCell())
+    .storeRef(beginCell().storeUint(0, 32 * 8).endCell())
+    .endCell();
 }
 
 export const Opcodes = {
     init_committee: 0xed62943d,
     update_committee: 0xd162d319,
+    update_beacon: 0x594d8d1c,
+    proof_receipt: 0x8d684a04,
 };
 
 export class LightClient implements Contract {
@@ -65,8 +71,7 @@ export class LightClient implements Contract {
             value: bigint;
             queryID?: number;
             committee: Cell;
-            aggregate: Cell;
-            beaconSSZ: Cell;
+            committee_branch: Cell;
 
         }
     ) {
@@ -76,10 +81,57 @@ export class LightClient implements Contract {
             body: beginCell()
                 .storeUint(Opcodes.update_committee, 32)
                 .storeUint(opts.queryID ?? 0, 64)
-
                 .storeRef(opts.committee)
+                .storeRef(opts.committee_branch)
+                .endCell(),
+        });
+    }
+
+    async sendUpdateBeacon(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+
+            value: bigint;
+            queryID?: number;
+            aggregate: Cell;
+            beaconSSZ: Cell;
+
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.update_beacon, 32)
+                .storeUint(opts.queryID ?? 0, 64)
                 .storeRef(opts.aggregate)
                 .storeRef(opts.beaconSSZ)
+
+                .endCell(),
+        });
+    }
+
+    async sendUpdateReceipt(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+
+            value: bigint;
+            queryID?: number;
+            execution: Cell;
+            execution_branch: Cell;
+
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.proof_receipt, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.execution)
+                .storeRef(opts.execution_branch)
 
                 .endCell(),
         });
