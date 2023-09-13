@@ -2,6 +2,7 @@
 #include "utils/messages.fc";
 #include "static/logs.fc";
 #include "ssz/ssz_utils.fc";
+#include "utils/rlp_verify.fc";
 
 ;; BLS_AGGREGATE
 ;; (slice) bls_aggregate(tuple data) asm "DUP TLEN EXPLODEVAR BLS_AGGREGATE";
@@ -13,6 +14,8 @@ const op::init_committee = "op::init_committee"c;
 const op::update_committee = "op::update_committee"c;
 const op::update_beacon = "op::update_beacon"c;
 const op::proof_receipt_root = "op::proof_receipt"c;
+const op::verify_proof = "op::verify_proof"c; ;; create an opcode from string using the "c" prefix, this results in 5e742370 opcode in this case
+
 
 const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa;
 
@@ -276,6 +279,15 @@ global int receipt_root;
         } else {
             throw(0xffff);
         }
+    }
+
+    if (op == op::verify_proof) {
+        cell receipt = in_msg_body~load_ref();
+        cell root_hash = begin_cell().store_uint(receipt_root, 32 * 8).end_cell();
+        cell path_cell = in_msg_body~load_ref();
+        cell proof = in_msg_body~load_ref();
+        verify_merkle_proof(receipt, root_hash, path_cell, proof);
+        return();
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw

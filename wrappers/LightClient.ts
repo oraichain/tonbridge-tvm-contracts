@@ -18,6 +18,7 @@ export const Opcodes = {
     update_committee: 0xd162d319,
     update_beacon: 0x594d8d1c,
     proof_receipt: 0x8d684a04,
+    verifyProof: 0x5e742370,
 };
 
 export class LightClient implements Contract {
@@ -133,6 +134,32 @@ export class LightClient implements Contract {
                 .storeRef(opts.execution)
                 .storeRef(opts.execution_branch)
 
+                .endCell(),
+        });
+    }
+
+    async sendVerifyProof(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            queryID?: number;
+            receipt: Cell;
+            // rootHash: Cell;
+            path: Cell;
+            receiptProof: Cell;
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.verifyProof, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.receipt)
+                // .storeRef(opts.rootHash)
+                .storeRef(opts.path)
+                .storeRef(opts.receiptProof)
                 .endCell(),
         });
     }
