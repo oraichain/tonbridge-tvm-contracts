@@ -1,15 +1,15 @@
-import {Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode} from 'ton-core';
+import {Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Dictionary, Sender, SendMode} from 'ton-core';
 
 export type LightClientConfig = {
-    id: number;
+    // id: number;
 };
 
 export function lightClientConfigToCell(config: LightClientConfig): Cell {
-    return beginCell().storeUint(config.id, 32).storeRef(beginCell().storeDict().endCell()).endCell();
+    const CommitteeContent = Dictionary.empty(Dictionary.Keys.Uint(32), Dictionary.Values.Buffer(48));
+    return beginCell().storeRef(beginCell().storeDict(CommitteeContent).endCell()).endCell();
 }
 
 export const Opcodes = {
-    increase: 0x7e8764ef,
     init_committee: 0xed62943d,
     update_committee: 0xd162d319,
 };
@@ -32,26 +32,6 @@ export class LightClient implements Contract {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell().endCell(),
-        });
-    }
-
-    async sendIncrease(
-        provider: ContractProvider,
-        via: Sender,
-        opts: {
-            increaseBy: number;
-            value: bigint;
-            queryID?: number;
-        }
-    ) {
-        await provider.internal(via, {
-            value: opts.value,
-            sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: beginCell()
-                .storeUint(Opcodes.increase, 32)
-                .storeUint(opts.queryID ?? 0, 64)
-                .storeUint(opts.increaseBy, 32)
-                .endCell(),
         });
     }
 
@@ -87,7 +67,7 @@ export class LightClient implements Contract {
             committee: Cell;
             aggregate: Cell;
             beaconSSZ: Cell;
-            msg: Cell;
+
         }
     ) {
         await provider.internal(via, {
@@ -100,7 +80,7 @@ export class LightClient implements Contract {
                 .storeRef(opts.committee)
                 .storeRef(opts.aggregate)
                 .storeRef(opts.beaconSSZ)
-                .storeRef(opts.msg)
+
                 .endCell(),
         });
     }

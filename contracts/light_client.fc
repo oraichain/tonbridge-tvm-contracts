@@ -18,35 +18,17 @@ const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0f
 
 ;; id is required to be able to create different instances of counters
 ;; since addresses in TON depend on the initial state of the contract
-global int ctx_id;
+;; global int ctx_id;
 global cell pubkeys_dict;
 
 ;; load_data populates storage variables using stored data
 () load_data() impure {
     var ds = get_data().begin_parse();
 
-    ctx_id = ds~load_uint(32);
+    ;; ctx_id = ds~load_uint(32);
     cell pubs_cell = ds~load_ref();
     slice pubs_slice = pubs_cell.begin_parse();
     pubkeys_dict = pubs_slice~load_dict();
-
-
-    ;; (int key, slice val, int flag) = pubkeys_dict.udict_get_min?(32);
-
-    ;; var ds2 = get_data().begin_parse();
-    ;; cell some_cell = ds2~load_ref();
-    ;; slice some_slice = some_cell.begin_parse();
-    ;; cell some_cell2 = some_slice~load_ref();
-
-    cell log_body = begin_cell()
-    ;; .store_uint(0x11, 8 * 8)
-    ;; .store_uint(is_signed & 0xF, 32 * 8)
-    ;; .store_slice()
-    ;; .store_ref(some_cell2)
-    .store_dict(pubkeys_dict)
-    .end_cell();
-
-    emit_log_simple(log::wrap, log_body, 0);
 
     ds.end_parse();
 }
@@ -55,7 +37,7 @@ global cell pubkeys_dict;
 () save_data() impure {
     set_data(
         begin_cell()
-            .store_uint(ctx_id, 32)
+            ;; .store_uint(ctx_id, 32)
             .store_ref(
             begin_cell()
                 .store_dict(pubkeys_dict)
@@ -63,15 +45,6 @@ global cell pubkeys_dict;
         )
             .end_cell()
     );
-
-    ;; cell log_body = begin_cell()
-    ;; .store_uint(0x11, 8 * 8)
-    ;; ;; .store_uint(is_signed & 0xF, 32 * 8)
-    ;; ;; .store_slice()
-    ;; .store_dict(pubkeys_dict)
-    ;; .end_cell();
-
-    ;; emit_log_simple(log::wrap, log_body, 0);
 }
 
 ;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
@@ -91,13 +64,6 @@ global cell pubkeys_dict;
     int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
     int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
 
-    if (op == op::increase) {
-        int increase_by = in_msg_body~load_uint(32);
-        ;; ctx_counter += increase_by;
-        save_data();
-        return ();
-    }
-
     if (op == op::init_committee) {
         cell data = in_msg_body~load_ref();
         slice data_slice = data.begin_parse();
@@ -105,7 +71,6 @@ global cell pubkeys_dict;
         slice committee_slice = committee_cell.begin_parse();
         pubkeys_dict = committee_slice~load_dict();
         save_data();
-
         return ();
     }
 
@@ -118,11 +83,8 @@ global cell pubkeys_dict;
         cell aggregate_cell = in_msg_body~load_ref();
         slice aggregate_slice = aggregate_cell.begin_parse();
         slice beacon_ssz = (in_msg_body~load_ref()).begin_parse();
-        slice msg = (in_msg_body~load_ref()).begin_parse();
-        load_data();
 
         slice aggr_pubkey = begin_cell().end_cell().begin_parse();
-
 
         (int key, slice val, int flag) = pubkeys_dict.udict_get_min?(32);
 
@@ -149,52 +111,19 @@ global cell pubkeys_dict;
 
         int signature_hash = merkleize(chunks, 2, 2);
 
-        cell log_body = begin_cell()
-        ;; .store_uint(is_signed & 0xF, 8 * 8)
-        ;; .store_uint(is_signed & 0xF, 32 * 8)
-        .store_slice(aggr_pubkey)
-        .store_ref(begin_cell().store_slice(sig).end_cell())
-        ;; .store_ref(begin_cell().store_slice(pubkeys_dict).end_cell())
-        ;; .store_ref(pubkeys_dict)
-        .end_cell();
-
-        emit_log_simple(log::wrap, log_body, 0);
-
-        return();
-        throw(0xffff);
         int is_signed = bls_verify(aggr_pubkey, begin_cell().store_uint(signature_hash, 32 * 8).end_cell().begin_parse(), sig);
 
-        cell log_body = begin_cell()
-        ;; .store_uint(is_signed & 0xF, 8 * 8)
-        .store_uint(is_signed & 0xF, 32 * 8)
-        ;; .store_slice(beacon_ssz)
-        ;; .store_ref(val)
-        .end_cell();
-
-        emit_log_simple(log::wrap, log_body, 0);
-
-        pubkeys_dict = committee_slice~load_dict();
-        save_data();
-
-        return ();
+        if (is_signed) {
+            pubkeys_dict = committee_slice~load_dict();
+            save_data();
+            return();
+        }
+        throw(0xffff);
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
 }
 
-;; get methods are a means to conveniently read contract data using, for example, HTTP APIs
-;; they are marked with method_id
-;; note that unlike in many other smart contract VMs, get methods cannot be called by other contracts
-
-;; int get_counter() method_id {
-;;     load_data();
-;;     return ctx_counter;
-;; }
-
-;; int get_id() method_id {
-;;     load_data();
-;;     return ctx_id;
-;; }
 
 cell get_pubkeys() method_id {
     load_data();
