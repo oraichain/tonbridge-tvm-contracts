@@ -1,3 +1,0 @@
-;; bridge
-const int log::wrap = 1;
-const int log::burn = 2;
