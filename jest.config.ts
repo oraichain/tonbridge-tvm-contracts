@@ -1,9 +1,9 @@
-import type { Config } from 'jest';
+import type {Config} from 'jest';
 
 const config: Config = {
     preset: 'ts-jest',
     testEnvironment: 'node',
-    maxWorkers: 1
+    testPathIgnorePatterns: ['/node_modules/', '/dist/', '/evm-data/'],
 };
 
 export default config;

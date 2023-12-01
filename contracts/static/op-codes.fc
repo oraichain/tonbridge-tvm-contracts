@@ -1,6 +1,15 @@
-;; public
+;; bridge
+const int log::wrap = 1;
+const int log::burn = 2;
+;; adapter
 int op::wrap() asm "0xf0a28992 PUSHINT";
-int op::receipt() asm "0 PUSHINT";
-int op::receipt_withdraw() asm "1 PUSHINT";
-int op::transfer_notification() asm "0x7362d09c PUSHINT";
-int op::burn() asm "0x595f07bc PUSHINT";
+const op::receipt_confirmed = "receipt_confirmed"c;
+const op::send_receipt = "send_receipt"c;
+const op::set_jminter = "set_jminter"c;
+;; light_client
+const op::verify_receipt = "verify_receipt"c;
+const op::init_committee = "op::init_committee"c;
+const op::add_optimistic_update = "op::add_optimistic_update"c;
+const op::add_execution = "op::add_execution"c;
+const op::add_next_sync_committee = "op::add_next_sync_committee"c;
+const op::add_finally_update = "op::add_finally_update"c;

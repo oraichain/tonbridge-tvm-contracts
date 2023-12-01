@@ -1,23 +1,47 @@
-import {Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Dictionary, Sender, SendMode} from 'ton-core';
+import {
+    Address,
+    beginCell,
+    Cell,
+    Contract,
+    contractAddress,
+    ContractProvider,
+    Dictionary,
+    Sender,
+    SendMode,
+} from 'ton-core';
 
 export type LightClientConfig = {
-    // id: number;
+    // adapterAddr?: Address;
 };
 
 export function lightClientConfigToCell(config: LightClientConfig): Cell {
     const CommitteeContent = Dictionary.empty(Dictionary.Keys.Uint(32), Dictionary.Values.Buffer(48));
+    const BeaconsContent = Dictionary.empty(Dictionary.Keys.Uint(32 * 8), Dictionary.Values.Cell());
     return beginCell()
-    .storeRef(beginCell().storeDict(CommitteeContent).endCell())
-    .storeRef(beginCell().endCell())
-    .storeRef(beginCell().storeUint(0, 32 * 8).endCell())
-    .endCell();
+        .storeRef(beginCell().storeDict(CommitteeContent).endCell())
+        .storeRef(beginCell().storeDict(BeaconsContent).endCell())
+        // .storeRef(
+        //     adapterAddr ?
+        //     beginCell()
+        //         .storeAddress(adapterAddr)
+        //     .endCell() :
+        //     beginCell()
+        //         .storeSlice(
+        //             beginCell()
+        //                 .storeUint(0, 2)
+        //             .endCell().beginParse()
+        //         )
+        //     .endCell()
+        // )
+        .endCell();
 }
 
 export const Opcodes = {
     init_committee: 0xed62943d,
-    update_committee: 0xd162d319,
-    update_beacon: 0x594d8d1c,
-    proof_receipt: 0x8d684a04,
+    add_optimistic_update: 0x70a8758c,
+    add_execution: 0xc52dcbd0,
+    add_next_sync_committee: 0x1440cfc,
+    add_finally_update: 0x57ef7473,
     verifyProof: 0x5e742370,
 };
 
@@ -58,57 +82,28 @@ export class LightClient implements Contract {
             body: beginCell()
                 .storeUint(Opcodes.init_committee, 32)
                 .storeUint(opts.queryID ?? 0, 64)
-
                 .storeRef(opts.committee)
                 .endCell(),
         });
     }
 
-    async sendUpdateCommittee(
+    async sendAddOptimisticUpdate(
         provider: ContractProvider,
         via: Sender,
         opts: {
 
             value: bigint;
             queryID?: number;
-            committee: Cell;
-            committee_branch: Cell;
-
+            beacon: Cell
         }
     ) {
         await provider.internal(via, {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                .storeUint(Opcodes.update_committee, 32)
+                .storeUint(Opcodes.add_optimistic_update, 32)
                 .storeUint(opts.queryID ?? 0, 64)
-                .storeRef(opts.committee)
-                .storeRef(opts.committee_branch)
-                .endCell(),
-        });
-    }
-
-    async sendUpdateBeacon(
-        provider: ContractProvider,
-        via: Sender,
-        opts: {
-
-            value: bigint;
-            queryID?: number;
-            aggregate: Cell;
-            beaconSSZ: Cell;
-
-        }
-    ) {
-        await provider.internal(via, {
-            value: opts.value,
-            sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: beginCell()
-                .storeUint(Opcodes.update_beacon, 32)
-                .storeUint(opts.queryID ?? 0, 64)
-                .storeRef(opts.aggregate)
-                .storeRef(opts.beaconSSZ)
-
+                .storeRef(opts.beacon)
                 .endCell(),
         });
     }
@@ -122,6 +117,55 @@ export class LightClient implements Contract {
             queryID?: number;
             execution: Cell;
             execution_branch: Cell;
+            beacon_hash: Cell;
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.add_execution, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.execution)
+                .storeRef(opts.execution_branch)
+                .storeRef(opts.beacon_hash)
+                .endCell(),
+        });
+    }
+
+    async sendNextCommittee(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            queryID?: number;
+            committee: Cell;
+            committee_branch: Cell;
+            beacon_hash: Cell;
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.add_next_sync_committee, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.committee)
+                .storeRef(opts.committee_branch)
+                .storeRef(opts.beacon_hash)
+                .endCell(),
+        });
+    }
+
+    async sendFinalityUpdate(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+
+            value: bigint;
+            queryID?: number;
+            aggregate: Cell;
+            beacon_hash: Cell;
 
         }
     ) {
@@ -129,10 +173,10 @@ export class LightClient implements Contract {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                .storeUint(Opcodes.proof_receipt, 32)
+                .storeUint(Opcodes.add_finally_update, 32)
                 .storeUint(opts.queryID ?? 0, 64)
-                .storeRef(opts.execution)
-                .storeRef(opts.execution_branch)
+                .storeRef(opts.aggregate)
+                .storeRef(opts.beacon_hash)
 
                 .endCell(),
         });
@@ -145,9 +189,10 @@ export class LightClient implements Contract {
             value: bigint;
             queryID?: number;
             receipt: Cell;
-            // rootHash: Cell;
+            adapterAddr: Address;
             path: Cell;
             receiptProof: Cell;
+            beacon_hash: Cell;
         }
     ) {
         await provider.internal(via, {
@@ -157,25 +202,15 @@ export class LightClient implements Contract {
                 .storeUint(Opcodes.verifyProof, 32)
                 .storeUint(opts.queryID ?? 0, 64)
                 .storeRef(opts.receipt)
-                // .storeRef(opts.rootHash)
+                .storeRef(
+                    beginCell()
+                        .storeAddress(opts.adapterAddr)
+                        .storeRef(opts.beacon_hash)
+                    .endCell()
+                )
                 .storeRef(opts.path)
                 .storeRef(opts.receiptProof)
                 .endCell(),
         });
-    }
-
-    // async getCounter(provider: ContractProvider) {
-    //     const result = await provider.get('get_counter', []);
-    //     return result.stack.readNumber();
-    // }
-
-    // async getID(provider: ContractProvider) {
-    //     const result = await provider.get('get_id', []);
-    //     return result.stack.readNumber();
-    // }
-
-    async getPubkeys(provider: ContractProvider) {
-        const result = await provider.get('get_pubkeys', []);
-        return result.stack.readCell();
     }
 }

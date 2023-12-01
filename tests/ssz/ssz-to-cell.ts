@@ -1,7 +1,23 @@
 import {splitIntoRootChunks} from '@chainsafe/ssz/lib/util/merkleize';
 import {Cell, beginCell} from 'ton-core';
-import {Opcodes} from '../../wrappers/SSZ';
 import {BLSSignature, Root} from './ssz-beacon-type';
+
+export const Opcodes = {
+  run_ssz: 0x86f1bcc5,
+  run_verify_receipt: 0x44b4412c,
+
+  type__bool: 0xf43a7aa,
+  type__uint: 0xcc771d29,
+
+  type__byteVector: 0x8f2cdfd8,
+  type__bytelist: 0x31ffdd28,
+  type__container: 0x81706e6d,
+  type__list: 0x1e0a6920,
+  type__vector: 0x8bf90db0,
+  type__empty: 0x409f47cb,
+  type__bitlist: 0x501abea0,
+  type__bitVector: 0xa8cd9c9c
+};
 
 export function getSSZContainer(body: Cell, tail?: Cell) {
   const builder = beginCell()

@@ -1,14 +1,48 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from 'ton-core';
+import {Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode} from 'ton-core';
+import {bytes32} from '../evm-data/utils';
 
-export type AdapterConfig = {};
+export type AdapterConfig = {
+    topic_mint_id?: string;
+    topic_burn_id?: string;
+    light_client_addr: Address;
+    // jminter_addr: Address;
+};
 
 export enum BridgeOpCodes {
     WRAP = 0xf0a28992,
-    RECEIPT = 0,
+    SEND_RECEIPT = 0x85d0c32b,
+    CONFIRM_RECEIPT = 0xe4c557c2,
+    SET_JMINTER = 0x3bceecc4,
 }
 
 export function adapterConfigToCell(config: AdapterConfig): Cell {
-    return beginCell().endCell();
+    return beginCell()
+        .storeRef(
+            beginCell()
+                .storeAddress(config.light_client_addr)
+            .endCell()
+        )
+        .storeRef(
+            beginCell()
+                .storeBuffer(bytes32(config.topic_mint_id || '0x0'), 32)
+            .endCell()
+        )
+        .storeRef(
+            beginCell()
+                .storeBuffer(bytes32(config.topic_burn_id || '0x0'), 32)
+            .endCell()
+        )
+        .storeRef(
+            beginCell()
+                .storeSlice(
+                    beginCell()
+                        .storeUint(0, 2)
+                    .endCell().beginParse()
+                )
+                // .storeAddress(config.jminter_addr)
+            .endCell()
+        )
+    .endCell();
 }
 
 export class Adapter implements Contract {
@@ -38,8 +72,6 @@ export class Adapter implements Contract {
         opts: {
             value: bigint;
             receipt: Cell;
-            addrStr: string;
-            jminterAddr: Address;
             queryID?: number;
         }
     ) {
@@ -47,10 +79,28 @@ export class Adapter implements Contract {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                .storeUint(BridgeOpCodes.RECEIPT, 32)
+                .storeUint(BridgeOpCodes.SEND_RECEIPT, 32)
                 .storeUint(opts.queryID ?? 0, 64)
-                .storeUint(BigInt(opts.addrStr), 256)
-                .storeAddress(opts.jminterAddr)
+                .storeRef(opts.receipt)
+                .endCell(),
+        });
+    }
+
+    async sendConfirmReceipt(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            receipt: Cell;
+            queryID?: number;
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(BridgeOpCodes.CONFIRM_RECEIPT, 32)
+                .storeUint(opts.queryID ?? 0, 64)
                 .storeRef(opts.receipt)
                 .endCell(),
         });
@@ -72,6 +122,26 @@ export class Adapter implements Contract {
                 .storeUint(0, 64)
                 .storeUint(BigInt(params.ethAddr), 256)
                 .storeUint(params.amount, 256)
+                .endCell(),
+        });
+    }
+
+    async sendJminterAddr(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            jminterAddr: Address;
+            queryID?: number;
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(BridgeOpCodes.SET_JMINTER, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeAddress(opts.jminterAddr)
                 .endCell(),
         });
     }

@@ -1,5 +1,5 @@
 #include "../utils/messages.fc";
-#include "../static/logs.fc";
+#include "../static/op-codes.fc";
 builder store_endian4(builder b, int x) asm(x b) "STULE4";
 builder store_endian8(builder b, int x) asm(x b) "STULE8";
 
@@ -243,17 +243,6 @@ int bitLength(int n) impure {
   ;; slice cs = value.begin_parse();
   int data_type = cs~load_uint(32);
 
-  cell log_body = begin_cell()
-        .store_uint(data_type, 32)
-        .store_ref(
-          begin_cell()
-            .store_uint(cs.slice_refs(), 16)
-          .end_cell()
-        )
-        .end_cell();
-
-  emit_log_simple(log::wrap, log_body, 0);
-
   if (data_type == type::bool) {
     int data = cs~load_uint(1);
     return (cs, begin_cell()
@@ -398,14 +387,6 @@ int bitLength(int n) impure {
     int res = merkleize(chunks, valueLength, count);
     res = mix_in_length(res, count);
 
-    cell log_body = begin_cell()
-        .store_uint(0x9999, 16)
-        .store_uint(res, 32 * 8)
-
-        .end_cell();
-
-    emit_log_simple(log::wrap, log_body, 0);
-
     return (cs, begin_cell()
     .store_uint(res, 32 * 8)
     .end_cell().begin_parse());
@@ -426,28 +407,12 @@ int bitLength(int n) impure {
       chunks = cons(field_hash, chunks);
       count += 1;
 
-      cell log_body = begin_cell()
-        .store_uint(0x1111, 16)
-        .store_uint(field_hash, 32 * 8)
-
-        .end_cell();
-
-        emit_log_simple(log::wrap, log_body, 0);
-
       while (fields_slice.slice_refs_empty?() == 0) {
         fields = fields_slice~load_ref();
         fields_slice = fields.begin_parse();
 
         slice field_res = fields_slice~hashTreeRoot();
         int field_hash = field_res~load_uint(32 * 8);
-
-        cell log_body = begin_cell()
-        .store_uint(0x1111, 16)
-        .store_uint(field_hash, 32 * 8)
-
-        .end_cell();
-
-        emit_log_simple(log::wrap, log_body, 0);
 
         chunks = cons(field_hash, chunks);
         count += 1;
@@ -458,16 +423,6 @@ int bitLength(int n) impure {
 
     int res = merkleize(reverse_list(chunks), valueLength, count);
     ;; res = mix_in_length(res, count);
-
-    cell log_body = begin_cell()
-        .store_uint(0x9999, 16)
-        .store_uint(res, 32 * 8)
-        .store_uint(count, 16)
-        .store_uint(valueLength, 16)
-
-        .end_cell();
-
-    emit_log_simple(log::wrap, log_body, 0);
 
     return (cs, begin_cell()
     .store_uint(res, 32 * 8)

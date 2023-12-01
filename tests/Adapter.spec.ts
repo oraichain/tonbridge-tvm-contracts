@@ -1,18 +1,17 @@
-import { compile } from '@ton-community/blueprint';
-import { Blockchain, SandboxContract, TreasuryContract } from '@ton-community/sandbox';
+import {compile} from '@ton-community/blueprint';
+import {Blockchain, SandboxContract, TreasuryContract} from '@ton-community/sandbox';
 import '@ton-community/test-utils';
-import { ethers } from 'ethers';
-import { beginCell, Cell, Dictionary, ExternalAddress, toNano } from 'ton-core';
-import { sha256 } from 'ton-crypto';
-import { IReceiptJSON, Receipt } from '../evm-data/receipt';
-import { Adapter } from '../wrappers/Adapter';
-import { JettonMinter } from '../wrappers/JettonMinter';
-import { JettonWallet } from '../wrappers/JettonWallet';
-import { jsonReceipt } from './mocks';
-import { expectFail, expectSuccess } from './utils/tests';
+import {ethers} from 'ethers';
+import {Cell, Dictionary, address, beginCell, toNano} from 'ton-core';
+import {sha256} from 'ton-crypto';
+import {IReceiptJSON, Receipt} from '../evm-data/receipt';
+import {Adapter} from '../wrappers/Adapter';
+import {JettonMinter} from '../wrappers/JettonMinter';
+import {JettonWallet} from '../wrappers/JettonWallet';
+import {jsonReceipt} from './mock/receiptWithEvents';
+import {expectFail, expectSuccess} from './utils/tests';
 
-const eth_addr = '0xC7296D50dDB12de4d2Cd8C889A73B98538624f61';
-const originalTopicId = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+const originalTopicId = '0x09a9af46918f2e52460329a694cdd4cd6d55354ea9b336b88b4dea59914a9a83';
 const receipt = JSON.stringify(jsonReceipt);
 
 export enum BridgeErrors {
@@ -41,19 +40,14 @@ describe('Adapter', () => {
     beforeEach(async () => {
         blockchain = await Blockchain.create();
 
-        adapter = blockchain.openContract(Adapter.createFromConfig({}, code));
-
         admin = await blockchain.treasury('admin');
         user = await blockchain.treasury('user');
 
-        const adapterDeployRes = await adapter.sendDeploy(admin.getSender(), toNano('0.05'));
-
-        expect(adapterDeployRes.transactions).toHaveTransaction({
-            from: admin.address,
-            to: adapter.address,
-            deploy: true,
-            success: true,
-        });
+        adapter = blockchain.openContract(Adapter.createFromConfig({
+            // jminter_addr: jettonMinter.address,
+            topic_mint_id: originalTopicId,
+            light_client_addr: admin.address,
+        }, code));
 
         const jETHContent = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell());
         jETHContent
@@ -81,6 +75,20 @@ describe('Adapter', () => {
 
         const minterDeployRes = await jettonMinter.sendDeploy(deployer.getSender(), toNano('0.05'));
 
+        const adapterDeployRes = await adapter.sendDeploy(admin.getSender(), toNano('0.05'));
+
+        await adapter.sendJminterAddr(admin.getSender(), {
+            value: toNano('0.05'),
+            jminterAddr: jettonMinter.address,
+        })
+
+        expect(adapterDeployRes.transactions).toHaveTransaction({
+            from: admin.address,
+            to: adapter.address,
+            deploy: true,
+            success: true,
+        });
+
         expect(minterDeployRes.transactions).toHaveTransaction({
             from: deployer.address,
             to: jettonMinter.address,
@@ -91,30 +99,25 @@ describe('Adapter', () => {
 
     it('should generate msg', async () => {
         const dataArr = jsonReceipt.logs.filter((l) => l.topics.includes(originalTopicId)).map((l) => l.data);
-
         const r = Receipt.fromJSON(JSON.parse(receipt) as unknown as IReceiptJSON);
         const cell = r.toCell();
-        const userWalletAddr = await jettonMinter.getWalletAddress(user.address);
+        const rAddr = '0:0112aeb9f1d2e0d4ac4f8576718f4bdaa5930d61ebe8b6a788347efcea5a70c1';
+        let testAddress = address(rAddr);
+
+        const userWalletAddr = await jettonMinter.getWalletAddress(testAddress);
         const jettonWallet = blockchain.openContract(JettonWallet.createFromAddress(userWalletAddr));
 
-        // console.log('HEEEX:', user.address.hash.toString('hex'));
-
-        const sendReceiptResult = await adapter.sendReceipt(admin.getSender(), {
-            addrStr: '0x' + user.address.hash.toString('hex'),
+        const sendReceiptResult = await adapter.sendConfirmReceipt(admin.getSender(), {
             value: toNano('1.05'),
             receipt: cell,
-            jminterAddr: jettonMinter.address,
         });
 
-        const sendReceiptResult2 = await adapter.sendReceipt(admin.getSender(), {
-            addrStr: '0x' + user.address.hash.toString('hex'),
+        const sendReceiptResult2 = await adapter.sendConfirmReceipt(admin.getSender(), {
             value: toNano('1.05'),
             receipt: cell,
-            jminterAddr: jettonMinter.address,
         });
 
         const userBalance = await jettonWallet.getBalance();
-
         expectSuccess(sendReceiptResult.transactions, admin.address, adapter.address);
         expectSuccess(sendReceiptResult.transactions, adapter.address, jettonMinter.address);
         expectSuccess(sendReceiptResult.transactions, jettonMinter.address, jettonWallet.address);
@@ -123,72 +126,7 @@ describe('Adapter', () => {
         expectSuccess(sendReceiptResult2.transactions, adapter.address, jettonMinter.address);
         expectSuccess(sendReceiptResult2.transactions, jettonMinter.address, jettonWallet.address);
 
-        expect(userBalance.amount).toBe(2n * BigInt(dataArr[0])); // we send 2 receipts
-    });
-
-    it('should burn tokens', async () => {
-        const userWalletAddr = await jettonMinter.getWalletAddress(user.address);
-        const adapterWalletAddr = await jettonMinter.getWalletAddress(adapter.address);
-        const jettonWalletUser = blockchain.openContract(JettonWallet.createFromAddress(userWalletAddr));
-        const jettonWalletAdapter = blockchain.openContract(JettonWallet.createFromAddress(adapterWalletAddr));
-
-        const r = Receipt.fromJSON(JSON.parse(receipt) as unknown as IReceiptJSON);
-        const cell = r.toCell();
-
-        await adapter.sendReceipt(admin.getSender(), {
-            addrStr: '0x' + user.address.hash.toString('hex'),
-            value: toNano('1.05'),
-            receipt: cell,
-            jminterAddr: jettonMinter.address,
-        });
-
-        const dataArr = jsonReceipt.logs.filter((l) => l.topics.includes(originalTopicId)).map((l) => l.data);
-        const walletBalance = await jettonWalletUser.getBalance();
-        const initialSupply = await jettonMinter.getTotalsupply();
-
-        expect(walletBalance.amount).toBe(BigInt(dataArr[0]));
-
-        const burningAmount = 100000n;
-
-        const burnRes = await jettonWalletUser.sendTransfer(user.getSender(), {
-            value: toNano('1'),
-            toAddress: adapter.address,
-            queryId: 0,
-            fwdAmount: toNano('0.05'),
-            jettonAmount: burningAmount,
-            ethAddress: BigInt(ethAddr),
-        });
-
-        console.log({
-            user: user.address,
-            jWalletUser: jettonWalletUser.address,
-            jettonWalletAdapter: jettonWalletAdapter.address,
-            adapter: adapter.address,
-        });
-
-        expectSuccess(burnRes.transactions, user.address, jettonWalletUser.address);
-        expectSuccess(burnRes.transactions, jettonWalletUser.address, jettonWalletAdapter.address);
-        expectSuccess(burnRes.transactions, jettonWalletAdapter.address, adapter.address);
-        expectSuccess(burnRes.transactions, adapter.address, jettonWalletAdapter.address);
-        expectSuccess(burnRes.transactions, jettonWalletAdapter.address, jettonMinter.address);
-        expectSuccess(burnRes.transactions, jettonMinter.address, user.address);
-
-        expect(
-            burnRes.transactions
-                .filter((t) => t.externals.length > 0)
-                .map((t) =>
-                    t.outMessages
-                        .values()
-                        .filter((m) => m.info.dest instanceof ExternalAddress)
-                        .map((m) => m.info.dest?.toString())
-                )
-        ).toStrictEqual([['External<256:2>']]); // log::burn = 2;
-
-        const walletBalanceBurned = await jettonWalletUser.getBalance();
-        expect(walletBalanceBurned.amount).toBe(BigInt(dataArr[0]) - burningAmount);
-
-        const expectedSupply = await jettonMinter.getTotalsupply();
-        expect(expectedSupply).toBe(initialSupply - burningAmount);
+        expect(userBalance.amount).toBe(2n * BigInt('0x3e8'));
     });
 
     it('should throw MSG_VALUE_TOO_SMALL if msg.value less that amount + 0.2 TON', async () => {
@@ -222,12 +160,3 @@ describe('Adapter', () => {
         ).toStrictEqual([['External<256:1>']]); // log::wrap = 1
     });
 });
-
-function parseMsgPart(body: Cell) {
-    const cs = body.beginParse();
-    const op = cs.loadUint(32);
-    const query1 = cs.loadUint(32);
-    const query2 = cs.loadUint(32);
-    const rest = cs;
-    return { op: op.toString(16), query1: query1.toString(16), query2: query2.toString(16), cs: rest };
-}

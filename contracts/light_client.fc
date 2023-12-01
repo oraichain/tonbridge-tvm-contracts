@@ -1,45 +1,40 @@
 #include "imports/stdlib.fc";
 #include "utils/messages.fc";
-#include "static/logs.fc";
-#include "ssz/ssz_utils.fc";
+#include "static/errors.fc";
+#include "static/op-codes.fc";
+#include "utils/ssz_utils.fc";
 #include "utils/rlp_verify.fc";
 
-;; BLS_AGGREGATE
-;; (slice) bls_aggregate(tuple data) asm "DUP TLEN EXPLODEVAR BLS_AGGREGATE";
 (slice) bls_aggregate(slice, slice) asm "BLS_G1_ADD";
 (int) bls_verify(slice pub, slice msg, slice sig) asm "BLS_VERIFY";
 
-const op::increase = "op::increase"c; ;; create an opcode from string using the "c" prefix, this results in 0x7e8764ef opcode in this case
-const op::init_committee = "op::init_committee"c;
-const op::update_committee = "op::update_committee"c;
-const op::update_beacon = "op::update_beacon"c;
-const op::proof_receipt_root = "op::proof_receipt"c;
-const op::verify_proof = "op::verify_proof"c; ;; create an opcode from string using the "c" prefix, this results in 5e742370 opcode in this case
-
-
-const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa;
-
 ;; storage variables
+int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
+const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa;
 
 ;; id is required to be able to create different instances of counters
 ;; since addresses in TON depend on the initial state of the contract
 ;; global int ctx_id;
+global cell beacons_dict;
 global cell pubkeys_dict;
-global cell beacon;
-global int receipt_root;
+;; global slice adapter_addr;
+
 
 ;; load_data populates storage variables using stored data
 () load_data() impure {
     var ds = get_data().begin_parse();
 
-    ;; ctx_id = ds~load_uint(32);
     cell pubs_cell = ds~load_ref();
     slice pubs_slice = pubs_cell.begin_parse();
     pubkeys_dict = pubs_slice~load_dict();
-    beacon = ds~load_ref();
-    cell receipt_root_cell = ds~load_ref();
-    slice receipt_root_slice = receipt_root_cell.begin_parse();
-    receipt_root = receipt_root_slice~load_uint(32 * 8);
+
+    cell beacons_cell = ds~load_ref();
+    slice beacons_slice = beacons_cell.begin_parse();
+    beacons_dict = beacons_slice~load_dict();
+
+    ;; cell adapter_cell = ds~load_ref();
+    ;; slice adapter_slice = adapter_cell.begin_parse();
+    ;; adapter_addr = adapter_slice~load_msg_addr();
 
     ds.end_parse();
 }
@@ -50,17 +45,35 @@ global int receipt_root;
         begin_cell()
         .store_ref(
             begin_cell()
-                .store_dict(pubkeys_dict)
-            .end_cell()
+                    .store_dict(pubkeys_dict)
+                .end_cell()
         )
-        .store_ref(beacon)
         .store_ref(
             begin_cell()
-                .store_uint(receipt_root, 32 * 8)
-            .end_cell()
+                    .store_dict(beacons_dict)
+                .end_cell()
         )
+        ;; .store_ref(
+        ;;     begin_cell()
+        ;;         .store_slice(adapter_addr)
+        ;;     .end_cell()
+        ;; )
         .end_cell()
     );
+}
+
+(int) get_beacon_bls_msg(cell beacon) impure {
+    slice beacon_ssz = beacon.begin_parse();
+    (slice a, slice ssz_beacon_hash) = beacon_ssz.hashTreeRoot();
+
+    tuple chunks = empty_tuple();
+    chunks = cons(ssz_beacon_hash~load_uint(32 * 8), chunks);
+    chunks = cons(domain, chunks);
+
+    int signature_hash = merkleize(chunks, 2, 2);
+
+    ;; return begin_cell().store_uint(signature_hash, 32 * 8).end_cell().begin_parse();
+    return signature_hash;
 }
 
 (slice) get_aggregated_pubkey(slice aggregate_slice) impure {
@@ -82,23 +95,11 @@ global int receipt_root;
     return aggr_pubkey;
 }
 
-(slice) get_beacon_bls_msg() impure {
-    slice beacon_ssz = beacon.begin_parse();
-    (slice a, slice ssz_beacon_hash) = beacon_ssz.hashTreeRoot();
-
-    tuple chunks = empty_tuple();
-    chunks = cons(ssz_beacon_hash~load_uint(32 * 8), chunks);
-    chunks = cons(domain, chunks);
-
-    int signature_hash = merkleize(chunks, 2, 2);
-
-    return begin_cell().store_uint(signature_hash, 32 * 8).end_cell().begin_parse();
-}
-
-(int) verify_beacon(slice aggregate_slice, slice sig) impure {
+(int) verify_beacon(int beacon_signature, slice aggregate_slice, slice sig) impure {
     slice aggr_pubkey = get_aggregated_pubkey(aggregate_slice);
 
-    int is_signed = bls_verify(aggr_pubkey, get_beacon_bls_msg(), sig);
+    slice beacon_sig_slice = begin_cell().store_uint(beacon_signature, 32 * 8).end_cell().begin_parse();
+    int is_signed = bls_verify(aggr_pubkey, beacon_sig_slice, sig);
 
     return is_signed;
 }
@@ -133,7 +134,6 @@ global int receipt_root;
   return merkelize_dict(pubkeys, 512, 512);
 }
 
-;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
         return ();
@@ -145,6 +145,7 @@ global int receipt_root;
         return ();
     }
 
+    slice sender_addr = cs~load_msg_addr();
     load_data(); ;; here we populate the storage variables
 
     int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
@@ -156,88 +157,73 @@ global int receipt_root;
         cell committee_cell = data_slice~load_ref();
         slice committee_slice = committee_cell.begin_parse();
         pubkeys_dict = committee_slice~load_dict();
-        receipt_root = 0;
         save_data();
         return ();
     }
 
-    if (op == op::update_beacon) {
-        cell aggregate_cell = in_msg_body~load_ref();
-        slice aggregate_slice = aggregate_cell.begin_parse();
+    if (op == op::add_optimistic_update) {
+        ;; load beacon from msg
+        cell beacon = in_msg_body~load_ref();
+        int beacon_signature = get_beacon_bls_msg(beacon);
 
-        beacon = in_msg_body~load_ref();
-        slice aggr_pubkey = get_aggregated_pubkey(aggregate_slice);
-        slice sig = (aggregate_slice~load_ref()).begin_parse();
-        int is_signed = bls_verify(aggr_pubkey, get_beacon_bls_msg(), sig);
+        ;; TODO: check if not empty
+        cell beacon_struct = begin_cell()
+            .store_ref(beacon)
+        .end_cell();
+        beacons_dict~udict_set(32 * 8, beacon_signature, beacon_struct.begin_parse());
 
-        if (is_signed) {
-            receipt_root = 0;
-            save_data();
+        cell log_body = begin_cell()
+            .store_uint(beacon_signature, 32 * 8)
+
+            .end_cell();
+
+        emit_log_simple(log::wrap, log_body, query_id);
+
+        if (beacons_dict.dict_empty?()) {
+            throw(0x1111);
             return();
         }
-        throw(0xffff);
+
+        save_data();
+        return ();
     }
 
-    if (op == op::update_committee) {
-        cell data = in_msg_body~load_ref();
-        slice data_slice = data.begin_parse();
-        cell committee_cell = data_slice~load_ref();
-        slice committee_slice = committee_cell.begin_parse();
-        pubkeys_dict = committee_slice~load_dict();
-
-        cell committee_branch_cell = in_msg_body~load_ref();
-        slice committee_branch_slice = committee_branch_cell.begin_parse();
-
-        tuple committee_branch_tuple = committee_branch_to_tuple(committee_branch_slice);
-
-
-        int committee_aggregate_hash = aggregatePubkeyHashTreeRoot(data_slice);
-        int committee_pubkeys_hash = next_sync_committee_pubkeys_hash_tree_root(committee_cell.begin_parse());
-
-        tuple chunks = empty_tuple();
-        chunks = cons(committee_pubkeys_hash, chunks);
-        chunks = cons(committee_aggregate_hash, chunks);
-        int committee_hash = merkleize(chunks, 2, 2);
-
-        int execution_branch_length = 5;
-        int index = 23;
-
-        slice beacon_slice = beacon.begin_parse();
-        slice beacon_slot = beacon_slice~load_ref().begin_parse();
-        slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
-        slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
-        slice beacon_parent_root_data = beacon_parent_root~load_ref().begin_parse();
-
-        slice beacon_state_root = beacon_parent_root~load_ref().begin_parse();
-        slice beacon_state_root_data = beacon_state_root~load_ref().begin_parse();
-        slice beacon_body_root = beacon_state_root~load_ref().begin_parse();
-        slice beacon_body_root_data = beacon_body_root~load_ref().begin_parse();
-
-        int res = is_valid_merkle_branch(
-            committee_hash,
-            committee_branch_tuple,
-            execution_branch_length,
-            index,
-            beacon_state_root_data~load_uint(32 * 8)
-        );
-
-        if (res) {
-            save_data();
-            return ();
-        }
-
-        throw(0xffff);
-    }
-
-    if (op == op::proof_receipt_root) {
-        ;; throw(0x00ff);
+    if (op == op::add_execution) {
+        ;; add execution layer info (block_number, block_hash, receipts_roots) from executions
+        ;; beaconId, executionHeader, exBranch
         cell execution = in_msg_body~load_ref();
         cell execution_branch = in_msg_body~load_ref();
         slice execution_slice = execution.begin_parse();
 
+
+        cell key_cell = in_msg_body~load_ref();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+
         (slice tmp, slice execution_ssz_hash) = execution_slice.hashTreeRoot();
 
-        slice beacon_slice = beacon.begin_parse();
+        ;; if (beacons_dict.dict_empty?()) {
+        ;;     throw(0x1111);
+        ;;     return();
+        ;; }
+
+        (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, key_beacon_signature);
+
+        ;; if (flag == 0) {
+        ;;     throw(0x1000);
+        ;;     return();
+        ;; }
+
+        ;; cell log_body = begin_cell()
+        ;;     .store_slice(beacon_structure_slice)
+        ;;     .end_cell();
+
+        ;; emit_log_simple(log::wrap, log_body, query_id);
+        ;; return ();
+        cell beacon_cell = beacon_structure_slice~load_ref();
+        slice beacon_slice = beacon_cell.begin_parse();
+
+
         slice beacon_slot = beacon_slice~load_ref().begin_parse();
         slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
         slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
@@ -262,18 +248,23 @@ global int receipt_root;
         );
 
 
-
         if (res) {
-            slice parent_hash_slice = (execution_slice~load_ref()).begin_parse();
-            parent_hash_slice~load_ref();
-            slice fee_recipient_slice = (parent_hash_slice~load_ref()).begin_parse();
-            fee_recipient_slice~load_ref();
-            slice state_root_slice = (fee_recipient_slice~load_ref()).begin_parse();
-            state_root_slice~load_ref();
-            slice receipts_root_slice = (state_root_slice~load_ref()).begin_parse();
-            slice receipts_root_data = (receipts_root_slice~load_ref()).begin_parse();
+            ;; slice parent_hash_slice = (execution_slice~load_ref()).begin_parse();
+            ;; parent_hash_slice~load_ref();
+            ;; slice fee_recipient_slice = (parent_hash_slice~load_ref()).begin_parse();
+            ;; fee_recipient_slice~load_ref();
+            ;; slice state_root_slice = (fee_recipient_slice~load_ref()).begin_parse();
+            ;; state_root_slice~load_ref();
+            ;; slice receipts_root_slice = (state_root_slice~load_ref()).begin_parse();
+            ;; slice receipts_root_data = (receipts_root_slice~load_ref()).begin_parse();
 
-            receipt_root = receipts_root_data~load_uint(32 * 8);
+            ;; receipt_root = receipts_root_data~load_uint(32 * 8);
+            cell beacon_struct = begin_cell()
+                .store_ref(beacon_cell)
+                .store_ref(execution)
+            .end_cell();
+            beacons_dict~udict_set(32 * 8, key_beacon_signature, beacon_struct.begin_parse());
+
             save_data();
             return();
         } else {
@@ -281,20 +272,151 @@ global int receipt_root;
         }
     }
 
-    if (op == op::verify_proof) {
+    if (op == op::add_next_sync_committee) {
+        cell data = in_msg_body~load_ref();
+        slice data_slice = data.begin_parse();
+        cell committee_cell = data_slice~load_ref();
+        slice committee_slice = committee_cell.begin_parse();
+
+        cell committee_branch_cell = in_msg_body~load_ref();
+        slice committee_branch_slice = committee_branch_cell.begin_parse();
+
+        tuple committee_branch_tuple = committee_branch_to_tuple(committee_branch_slice);
+
+
+        int committee_aggregate_hash = aggregatePubkeyHashTreeRoot(data_slice);
+        int committee_pubkeys_hash = next_sync_committee_pubkeys_hash_tree_root(committee_cell.begin_parse());
+
+        cell key_cell = in_msg_body~load_ref();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+        (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, key_beacon_signature);
+
+        tuple chunks = empty_tuple();
+        chunks = cons(committee_pubkeys_hash, chunks);
+        chunks = cons(committee_aggregate_hash, chunks);
+        int committee_hash = merkleize(chunks, 2, 2);
+
+        int execution_branch_length = 5;
+        int index = 23;
+
+        cell beacon_cell = beacon_structure_slice~load_ref();
+        slice beacon_slice = beacon_cell.begin_parse();
+        slice beacon_slot = beacon_slice~load_ref().begin_parse();
+        slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
+        slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
+        slice beacon_parent_root_data = beacon_parent_root~load_ref().begin_parse();
+
+        slice beacon_state_root = beacon_parent_root~load_ref().begin_parse();
+        slice beacon_state_root_data = beacon_state_root~load_ref().begin_parse();
+        slice beacon_body_root = beacon_state_root~load_ref().begin_parse();
+        slice beacon_body_root_data = beacon_body_root~load_ref().begin_parse();
+
+        int res = is_valid_merkle_branch(
+            committee_hash,
+            committee_branch_tuple,
+            execution_branch_length,
+            index,
+            beacon_state_root_data~load_uint(32 * 8)
+        );
+
+        if (res) {
+            cell execution = beacon_structure_slice~load_ref();
+
+            cell beacon_struct = begin_cell()
+                .store_ref(beacon_cell)
+                .store_ref(execution)
+                .store_ref(committee_cell)
+            .end_cell();
+            beacons_dict~udict_set(32 * 8, key_beacon_signature, beacon_struct.begin_parse());
+
+            save_data();
+            return ();
+        }
+
+        throw(0xffff);
+    }
+
+    if (op == op::add_finally_update) {
+        cell aggregate_cell = in_msg_body~load_ref();
+        slice aggregate_slice = aggregate_cell.begin_parse();
+
+        cell key_cell = in_msg_body~load_ref();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+        (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, key_beacon_signature);
+
+        slice aggr_pubkey = get_aggregated_pubkey(aggregate_slice);
+        slice sig = (aggregate_slice~load_ref()).begin_parse();
+
+        ;; slice aggregate_slice = begin_cell().store_uint(get_beacon_bls_msg(beacon_structure_slice~load_ref()), 32 * 8).end_cell().begin_parse();
+
+
+        ;; int is_signed = verify_beacon(aggr_pubkey, aggregate_slice, sig);
+        int msg_num = get_beacon_bls_msg(beacon_structure_slice~load_ref());
+        slice msg = begin_cell().store_uint(msg_num, 32 * 8).end_cell().begin_parse();
+        int is_signed = bls_verify(aggr_pubkey, msg , sig);
+
+        if (is_signed) {
+            beacon_structure_slice~load_ref();
+            if (beacon_structure_slice.slice_refs_empty?() == 0) {
+                pubkeys_dict = beacon_structure_slice~load_ref();
+            }
+            save_data();
+            return();
+        }
+
+        throw(0x1000);
+    }
+
+    if (op == op::verify_receipt) {
         cell receipt = in_msg_body~load_ref();
+        cell adapter_addr_cell = in_msg_body~load_ref();
+        slice adapter_addr_slice = adapter_addr_cell.begin_parse();
+        cell key_cell = adapter_addr_slice~load_ref();
+
+        slice adapter_addr = adapter_addr_slice~load_msg_addr();
+        ;; cell root_hash = begin_cell().store_uint(receipt_root, 32 * 8).end_cell();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+        (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, key_beacon_signature);
+
+        beacon_structure_slice~load_ref();
+        slice execution_slice = (beacon_structure_slice~load_ref()).begin_parse();
+
+        slice parent_hash_slice = (execution_slice~load_ref()).begin_parse();
+        parent_hash_slice~load_ref();
+        slice fee_recipient_slice = (parent_hash_slice~load_ref()).begin_parse();
+        fee_recipient_slice~load_ref();
+        slice state_root_slice = (fee_recipient_slice~load_ref()).begin_parse();
+        state_root_slice~load_ref();
+        slice receipts_root_slice = (state_root_slice~load_ref()).begin_parse();
+        slice receipts_root_data = (receipts_root_slice~load_ref()).begin_parse();
+
+        int receipt_root = receipts_root_data~load_uint(32 * 8);
         cell root_hash = begin_cell().store_uint(receipt_root, 32 * 8).end_cell();
+
+
         cell path_cell = in_msg_body~load_ref();
         cell proof = in_msg_body~load_ref();
         verify_merkle_proof(receipt, root_hash, path_cell, proof);
+
+        cell resend_msg = begin_cell()
+                        .store_uint(op::receipt_confirmed, 32)
+                        .store_uint(query_id, 64)
+                        .store_slice(receipt.begin_parse())
+                        .end_cell();
+
+        var msg = begin_cell()
+                    .store_uint(0x18, 6)
+                    .store_slice(adapter_addr)
+                    .store_coins(3 * gas_consumption())
+                    .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                    .store_ref(resend_msg);
+
+        send_raw_message(msg.end_cell(), 2 + 64); ;; //TODO: may be better mode
         return();
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
-}
-
-
-cell get_pubkeys() method_id {
-    load_data();
-    return pubkeys_dict;
 }
