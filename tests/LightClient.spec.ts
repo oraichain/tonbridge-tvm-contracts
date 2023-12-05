@@ -17,7 +17,6 @@ import {getExecutionContainerCell} from './ssz/finally_update.mock';
 import {BeaconBlockHeader, SigningData} from './ssz/ssz-beacon-type';
 import {SSZRootToCell, SSZUintToCell, getSSZContainer} from './ssz/ssz-to-cell';
 
-
 function committeeToCell(data: (typeof UpdatesJson)[0]['data']['next_sync_committee']) {
     const CommitteeContent = Dictionary.empty(Dictionary.Keys.Uint(32), Dictionary.Values.Buffer(48));
     data.pubkeys.forEach((item, i) => {
@@ -25,16 +24,16 @@ function committeeToCell(data: (typeof UpdatesJson)[0]['data']['next_sync_commit
     });
 
     return beginCell()
-    .storeBuffer(bytes(data.aggregate_pubkey))
-    .storeRef(beginCell().storeDict(CommitteeContent).endCell())
-    .endCell();
+        .storeBuffer(bytes(data.aggregate_pubkey))
+        .storeRef(beginCell().storeDict(CommitteeContent).endCell())
+        .endCell();
 }
 
 function syncAggregateToCell(data: (typeof UpdatesJson)[0]['data']['sync_aggregate']) {
     return beginCell()
-    .storeBuffer(bytes(data.sync_committee_bits))
-    .storeRef(beginCell().storeBuffer(bytes(data.sync_committee_signature)).endCell())
-    .endCell();
+        .storeBuffer(bytes(data.sync_committee_bits))
+        .storeRef(beginCell().storeBuffer(bytes(data.sync_committee_signature)).endCell())
+        .endCell();
 }
 
 const domain = '0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa';
@@ -69,21 +68,21 @@ describe('LightClient', () => {
     });
 
     let blockchain: Blockchain;
-    let beaconLightClient: SandboxContract<LightClient>;
+    let lightClient: SandboxContract<LightClient>;
 
     beforeAll(async () => {
         blockchain = await Blockchain.create({ config: getConfig() });
         // blockchain = await Blockchain.create();
 
-        beaconLightClient = blockchain.openContract(LightClient.createFromConfig({}, code));
+        lightClient = blockchain.openContract(LightClient.createFromConfig({}, code));
 
         const deployer = await blockchain.treasury('deployer');
 
-        const deployResult = await beaconLightClient.sendDeploy(deployer.getSender(), toNano('0.05'));
+        const deployResult = await lightClient.sendDeploy(deployer.getSender(), toNano('0.05'));
 
         expect(deployResult.transactions).toHaveTransaction({
             from: deployer.address,
-            to: beaconLightClient.address,
+            to: lightClient.address,
             deploy: true,
             success: true,
         });
@@ -91,7 +90,22 @@ describe('LightClient', () => {
 
     it('should deploy', async () => {
         // the check is done inside beforeEach
-        // blockchain and beaconLightClient are ready to use
+        // blockchain and lightClient are ready to use
+    });
+
+    it('should init pubkeys', async () => {
+        const user = await blockchain.treasury('user');
+
+        const initResult = await lightClient.sendInitCommittee(user.getSender(), {
+            value: toNano('15.05'),
+            committee: committeeToCell(initialCommittee),
+        });
+
+        expect(initResult.transactions).toHaveTransaction({
+            from: user.address,
+            to: lightClient.address,
+            success: true,
+        });
     });
 
     it('should store beacon', async () => {
@@ -110,20 +124,14 @@ describe('LightClient', () => {
             )
         );
 
-        const initResult = await beaconLightClient.sendAddOptimisticUpdate(user.getSender(), {
+        const initResult = await lightClient.sendAddOptimisticUpdate(user.getSender(), {
             value: toNano('15.05'),
             beacon: beaconContainerCell,
         });
 
-        const externalOutBodySlice = initResult.externals.map((ex) => ex.body.asSlice());
-        console.log(initResult.transactions.map((t) => t.vmLogs));
-        console.log(externalOutBodySlice);
-
-        console.log(Buffer.from(firstUpdateBeaconSignature).toString('hex'));
-
         expect(initResult.transactions).toHaveTransaction({
             from: user.address,
-            to: beaconLightClient.address,
+            to: lightClient.address,
             success: true,
         });
     });
@@ -145,7 +153,7 @@ describe('LightClient', () => {
             }
         }
 
-        const initResult = await beaconLightClient.sendUpdateReceipt(user.getSender(), {
+        const initResult = await lightClient.sendUpdateReceipt(user.getSender(), {
             value: toNano('15.05'),
             execution: executionCell,
             execution_branch: execution_branch_cell,
@@ -158,7 +166,7 @@ describe('LightClient', () => {
 
         expect(initResult.transactions).toHaveTransaction({
             from: user.address,
-            to: beaconLightClient.address,
+            to: lightClient.address,
             success: true,
         });
     });
@@ -179,20 +187,16 @@ describe('LightClient', () => {
             }
         }
 
-        const initResult = await beaconLightClient.sendNextCommittee(user.getSender(), {
+        const initResult = await lightClient.sendNextCommittee(user.getSender(), {
             value: toNano('15.05'),
             committee: committeeToCell(UpdatesJson[1].data.next_sync_committee),
             committee_branch: committee_branch_cell,
             beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
         });
 
-        // const externalOutBodySlice = initResult.externals.map(ex => ex.body.asSlice());
-        // console.log(initResult.transactions.map(t => t.vmLogs));
-        // console.log(externalOutBodySlice);
-
         expect(initResult.transactions).toHaveTransaction({
             from: user.address,
-            to: beaconLightClient.address,
+            to: lightClient.address,
             success: true,
         });
     });
@@ -207,7 +211,7 @@ describe('LightClient', () => {
             fixedCommitteeBits += parseInt(a.map((el) => (el ? 1 : 0)).join(''), 2).toString(16);
         });
 
-        const initResult = await beaconLightClient.sendFinalityUpdate(user.getSender(), {
+        const initResult = await lightClient.sendFinalityUpdate(user.getSender(), {
             value: toNano('15.05'),
             aggregate: syncAggregateToCell({
                 ...UpdatesJson[1].data.sync_aggregate,
@@ -216,37 +220,80 @@ describe('LightClient', () => {
             beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
         });
 
-        // console.log(initResult.transactions.map(t => t.vmLogs));
         expect(initResult.transactions).toHaveTransaction({
             from: user.address,
-            to: beaconLightClient.address,
+            to: lightClient.address,
             success: true,
         });
     });
 
     it('should verify and try run receipt', async () => {
+        const beaconContainerCell = getSSZContainer(
+            SSZUintToCell(
+                { value: +firstUpdateBeacon.slot, size: 8, isInf: true },
+                SSZUintToCell(
+                    { value: +firstUpdateBeacon.proposer_index, size: 8, isInf: false },
+                    SSZRootToCell(
+                        firstUpdateBeacon.parent_root,
+                        SSZRootToCell(firstUpdateBeacon.state_root, SSZRootToCell(firstUpdateBeacon.body_root))
+                    )
+                )
+            )
+        );
+
+        const executionCell = getExecutionContainerCell(firstUpdateExecution.execution);
+        let execution_branch_cell!: Cell;
+        for (let i = 0; i < firstUpdateExecution.execution_branch.length; i++) {
+            const branch_item = firstUpdateExecution.execution_branch[i];
+            if (!execution_branch_cell) {
+                execution_branch_cell = beginCell().storeBuffer(bytes(branch_item)).endCell();
+            } else {
+                execution_branch_cell = beginCell()
+                    .storeBuffer(bytes(branch_item))
+                    .storeRef(execution_branch_cell)
+                    .endCell();
+            }
+        }
+
         blockchain = await Blockchain.create({ config: getConfig() });
         // blockchain = await Blockchain.create();
 
-        beaconLightClient = blockchain.openContract(LightClient.createFromConfig({}, code));
+        lightClient = blockchain.openContract(
+            LightClient.createFromConfig(
+                {
+                    key: firstUpdateBeaconSignature,
+                    initialBeacon: beginCell()
+                        .storeUint(0x1111, 16)
+                        .storeRef(beaconContainerCell)
+                        .storeRef(executionCell)
+                        .endCell(),
+                },
+                code
+            )
+        );
 
         const deployer = await blockchain.treasury('deployer');
         const admin = await blockchain.treasury('admin');
 
-        const deployResult = await beaconLightClient.sendDeploy(deployer.getSender(), toNano('0.05'));
+        const deployResult = await lightClient.sendDeploy(deployer.getSender(), toNano('0.05'));
 
         expect(deployResult.transactions).toHaveTransaction({
             from: deployer.address,
-            to: beaconLightClient.address,
+            to: lightClient.address,
             deploy: true,
             success: true,
         });
 
-        const adapter = blockchain.openContract(Adapter.createFromConfig({
-            // jminter_addr: jettonMinter.address,
-            topic_mint_id: originalTopicId,
-            light_client_addr: beaconLightClient.address,
-        }, code));
+        const adapter = blockchain.openContract(
+            Adapter.createFromConfig(
+                {
+                    // jminter_addr: jettonMinter.address,
+                    topic_mint_id: originalTopicId,
+                    light_client_addr: lightClient.address,
+                },
+                code
+            )
+        );
 
         const jETHContent = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell());
         jETHContent
@@ -270,7 +317,6 @@ describe('LightClient', () => {
             )
         );
 
-
         const minterDeployRes = await jettonMinter.sendDeploy(deployer.getSender(), toNano('0.05'));
 
         const adapterDeployRes = await adapter.sendDeploy(admin.getSender(), toNano('0.05'));
@@ -278,7 +324,7 @@ describe('LightClient', () => {
         await adapter.sendJminterAddr(admin.getSender(), {
             value: toNano('0.05'),
             jminterAddr: jettonMinter.address,
-        })
+        });
 
         expect(adapterDeployRes.transactions).toHaveTransaction({
             from: admin.address,
@@ -350,7 +396,7 @@ describe('LightClient', () => {
         const proofBoc = cells[0].storeRef(cells[1]).endCell();
         // console.log(proofBoc.refs.length);
 
-        const callback = await beaconLightClient.sendVerifyProof(increaser.getSender(), {
+        const callback = await lightClient.sendVerifyProof(increaser.getSender(), {
             value: toNano('5.5'),
             receipt: cell,
             adapterAddr: adapter.address,
@@ -362,18 +408,12 @@ describe('LightClient', () => {
             beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
         });
 
-        // const externalOutBodySlice = callback.externals[0]?.body;
-        // console.log(callback.externals.map((e) => e?.body));
-        // console.log(block.receiptTrie.toString('hex'));
-
-
         expect(callback.transactions).toHaveTransaction({
             from: increaser.address,
-            to: beaconLightClient.address,
+            to: lightClient.address,
             success: false,
         });
-
-    })
+    });
 });
 
 const json = {

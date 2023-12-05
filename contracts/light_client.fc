@@ -172,13 +172,6 @@ global cell pubkeys_dict;
         .end_cell();
         beacons_dict~udict_set(32 * 8, beacon_signature, beacon_struct.begin_parse());
 
-        cell log_body = begin_cell()
-            .store_uint(beacon_signature, 32 * 8)
-
-            .end_cell();
-
-        emit_log_simple(log::wrap, log_body, query_id);
-
         if (beacons_dict.dict_empty?()) {
             throw(0x1111);
             return();
@@ -353,15 +346,25 @@ global cell pubkeys_dict;
 
 
         ;; int is_signed = verify_beacon(aggr_pubkey, aggregate_slice, sig);
-        int msg_num = get_beacon_bls_msg(beacon_structure_slice~load_ref());
+        cell beacon_cell = beacon_structure_slice~load_ref();
+        int msg_num = get_beacon_bls_msg(beacon_cell);
         slice msg = begin_cell().store_uint(msg_num, 32 * 8).end_cell().begin_parse();
         int is_signed = bls_verify(aggr_pubkey, msg , sig);
 
         if (is_signed) {
-            beacon_structure_slice~load_ref();
+            cell execution = beacon_structure_slice~load_ref();
             if (beacon_structure_slice.slice_refs_empty?() == 0) {
                 pubkeys_dict = beacon_structure_slice~load_ref();
             }
+
+            cell beacon_struct = begin_cell()
+                .store_uint(1, 1)
+                .store_ref(beacon_cell)
+                .store_ref(execution)
+                .store_ref(pubkeys_dict)
+            .end_cell();
+            beacons_dict~udict_set(32 * 8, key_beacon_signature, beacon_struct.begin_parse());
+
             save_data();
             return();
         }
@@ -380,7 +383,14 @@ global cell pubkeys_dict;
         slice key_slice = key_cell.begin_parse();
         int key_beacon_signature = key_slice~load_uint(32 * 8);
         (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, key_beacon_signature);
+        beacon_structure_slice = (beacon_structure_slice~load_ref()).begin_parse();
 
+        if (beacon_structure_slice.slice_data_empty?()) {
+            throw(0x1111);
+        }
+        if (beacon_structure_slice~load_uint(1)) {
+            throw(0x1111);
+        }
         beacon_structure_slice~load_ref();
         slice execution_slice = (beacon_structure_slice~load_ref()).begin_parse();
 

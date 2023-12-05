@@ -12,11 +12,18 @@ import {
 
 export type LightClientConfig = {
     // adapterAddr?: Address;
+    initialBeacon?: Cell;
+    key?: Uint8Array;
 };
 
 export function lightClientConfigToCell(config: LightClientConfig): Cell {
     const CommitteeContent = Dictionary.empty(Dictionary.Keys.Uint(32), Dictionary.Values.Buffer(48));
-    const BeaconsContent = Dictionary.empty(Dictionary.Keys.Uint(32 * 8), Dictionary.Values.Cell());
+    const BeaconsContent = Dictionary.empty(Dictionary.Keys.BigUint(32 * 8), Dictionary.Values.Cell());
+    if (config.initialBeacon && config.key) {
+        // console.log(Buffer.from(config.key).toString('hex'))
+        BeaconsContent.set(BigInt('0x' + Buffer.from(config.key).toString('hex')) , config.initialBeacon);
+
+    }
     return beginCell()
         .storeRef(beginCell().storeDict(CommitteeContent).endCell())
         .storeRef(beginCell().storeDict(BeaconsContent).endCell())
@@ -42,7 +49,7 @@ export const Opcodes = {
     add_execution: 0xc52dcbd0,
     add_next_sync_committee: 0x1440cfc,
     add_finally_update: 0x57ef7473,
-    verifyProof: 0x5e742370,
+    verifyProof: 0xf128d647,
 };
 
 export class LightClient implements Contract {
