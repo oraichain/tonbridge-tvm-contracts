@@ -19,6 +19,7 @@ export type LightClientConfig = {
 export function lightClientConfigToCell(config: LightClientConfig): Cell {
     const CommitteeContent = Dictionary.empty(Dictionary.Keys.Uint(32), Dictionary.Values.Buffer(48));
     const BeaconsContent = Dictionary.empty(Dictionary.Keys.BigUint(32 * 8), Dictionary.Values.Cell());
+    const BeaconsMetaContent = Dictionary.empty(Dictionary.Keys.BigUint(32 * 8), Dictionary.Values.Cell());
     if (config.initialBeacon && config.key) {
         // console.log(Buffer.from(config.key).toString('hex'))
         BeaconsContent.set(BigInt('0x' + Buffer.from(config.key).toString('hex')) , config.initialBeacon);
@@ -27,6 +28,7 @@ export function lightClientConfigToCell(config: LightClientConfig): Cell {
     return beginCell()
         .storeRef(beginCell().storeDict(CommitteeContent).endCell())
         .storeRef(beginCell().storeDict(BeaconsContent).endCell())
+        .storeRef(beginCell().storeDict(BeaconsMetaContent).endCell())
         // .storeRef(
         //     adapterAddr ?
         //     beginCell()
@@ -50,6 +52,11 @@ export const Opcodes = {
     add_next_sync_committee: 0x1440cfc,
     add_finally_update: 0x57ef7473,
     verifyProof: 0xf128d647,
+    calc_aggr_pubkey: 0x6189d5cd,
+    calc_committee_hash: 0xa103a392,
+    verify_committee: 0xad76635c,
+    verify_optimistic: 0xb5507839,
+    aggregate_pubkey: 0x58198c64,
 };
 
 export class LightClient implements Contract {
@@ -115,6 +122,27 @@ export class LightClient implements Contract {
         });
     }
 
+    async sendVerifyOptimisticUpdate(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+
+            value: bigint;
+            queryID?: number;
+            beacon: Cell
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.verify_optimistic, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.beacon)
+                .endCell(),
+        });
+    }
+
     async sendUpdateReceipt(
         provider: ContractProvider,
         via: Sender,
@@ -147,7 +175,6 @@ export class LightClient implements Contract {
             value: bigint;
             queryID?: number;
             committee: Cell;
-            committee_branch: Cell;
             beacon_hash: Cell;
         }
     ) {
@@ -158,8 +185,76 @@ export class LightClient implements Contract {
                 .storeUint(Opcodes.add_next_sync_committee, 32)
                 .storeUint(opts.queryID ?? 0, 64)
                 .storeRef(opts.committee)
+                .storeRef(opts.beacon_hash)
+                .endCell(),
+        });
+    }
+
+    async sendCalcNextCommitteeHash(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            queryID?: number;
+            beacon_hash: Cell;
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.calc_committee_hash, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.beacon_hash)
+                .endCell(),
+        });
+    }
+
+    async sendVerifyNextCommittee(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            queryID?: number;
+            committee: Cell;
+            committee_branch: Cell;
+            beacon_hash: Cell;
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.verify_committee, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.committee)
                 .storeRef(opts.committee_branch)
                 .storeRef(opts.beacon_hash)
+                .endCell(),
+        });
+    }
+
+    async sendAggregatePubkey(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+
+            value: bigint;
+            queryID?: number;
+            aggregate: Cell;
+            beacon_hash: Cell;
+
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.aggregate_pubkey, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.aggregate)
+                .storeRef(opts.beacon_hash)
+
                 .endCell(),
         });
     }

@@ -1,0 +1,37 @@
+{
+  "version": "capella",
+  "data": {
+    "attestedHeader": {
+      "beacon": {
+        "slot": 3920712,
+        "proposerIndex": 1270,
+        "parentRoot": "b0dd0dbc30c3c93a731a0255baa1a4084b70a2c9f9eec2959fda9bca07d19a42",
+        "stateRoot": "a157bcfba2a2b2cfbe10d4733082e3ceb5d6d1c1cb2fb96be271338b103bc857",
+        "bodyRoot": "c67e3e23ab3ae9b86af2fa34217b2a9536a53342b0cddb1476d86ae6c0f4637b"
+      },
+      "execution": {
+        "parentHash": "28a474d438bd74dbbe7a573f91365ca2951b8c36b37a75cb83d1eca398ba6010",
+        "feeRecipient": "1e2cd78882b12d3954a049fd82ffd691565dc0a5",
+        "stateRoot": "2bf4f838e84cea8718b5bcb2407aad3baf64b2321df22256d5360855b777397d",
+        "receiptsRoot": "4abf6145f74445699a7725799221d0d033e2ba2ca2f252fc77270ccb57e110d8",
+        "logsBloom": "f8a74d6209891b46526e163b3d81c7eb18b939652442180384d62a89b80cf12f4195d282a0271e8500ae5a13459639d5e101d6200607026c6a90d85d8d68538068eb484f00b484dfd8db505d682fed2009e570b05d8c42622c0b740044de9600b800ad091f244e9303d8b53a0908bc19b60305a40daba3502dd8a371be0c90c40028d9a1723412aeb73941e88c44c524f87014d81056884c094754fedf3c8a0b428e0506b89cc8c5a342d44e0d0f01211cd4b7718f980548267026e50d02da180b9101b3b6387441d5d423093611b4b427c69390c04fe30dc28ac09dcf42a8ce86f1562a655540d78005697884fc68103fc04b741d1ca600ce51ab2d0a410497",
+        "prevRandao": "c3ff6ddabd0fbba3a101cb10b3ba480afe5b09349448043d7cc0222f342b61b6",
+        "blockNumber": 4901661,
+        "gasLimit": 30000000,
+        "gasUsed": 29968441,
+        "timestamp": 1702782144,
+        "extraData": "496c6c756d696e61746520446d6f63726174697a6520447374726962757465",
+        "baseFeePerGas": "2710738789",
+        "blockHash": "264d72188df982f95ee8f0e2d26b82f1253af8b069f4c725bae32a570746918b",
+        "transactionsRoot": "ec5cb71f4d50839f142cd4bacd122c115bfbab2436a9bc5c7faeeeabf924473c",
+        "withdrawalsRoot": "a55223fe10dfe7214573b58ce2c3aecee3f7d5c182f9868e3995a0a7382bd793"
+      },
+      "executionBranch": [
+        "4836d9b93447fff763cc565d9f047123858c5f35ef260b909df4f0afcca5d6e3",
+        "336488033fe5f3ef4ccc12af07b9370b92e553e35ecb4a337a1b1c0e4afe1e0e",
+        "db56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+        "a902ee54d3640e4f6d8337af6cbbe0f2c680347f1f7b5ed21c6c250a79e148e1"
+      ]
+    }
+  }
+}

@@ -13,3 +13,10 @@ const op::add_optimistic_update = "op::add_optimistic_update"c;
 const op::add_execution = "op::add_execution"c;
 const op::add_next_sync_committee = "op::add_next_sync_committee"c;
 const op::add_finally_update = "op::add_finally_update"c;
+
+const op::calc_aggr_pubkey = "beacons_meta_slice"c;
+const op::calc_committee_hash = "calc_committee_hash"c;
+const op::verify_committee = "verify_committee"c;
+
+const op::verify_optimistic = "verify_optimistic"c;
+const op::aggregate_pubkey = "aggregate_pubkey"c;

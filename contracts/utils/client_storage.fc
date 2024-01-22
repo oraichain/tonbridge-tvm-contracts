@@ -1,0 +1,116 @@
+#include "../imports/stdlib.fc";
+#include "beacon_reader.fc";
+
+;; id is required to be able to create different instances of counters
+;; since addresses in TON depend on the initial state of the contract
+;; global int ctx_id;
+global cell beacons_dict;
+global cell pubkeys_dict;
+global cell beacons_meta_dict;
+;; global slice adapter_addr;
+
+;; load_data populates storage variables using stored data
+() load_data() impure {
+  var ds = get_data().begin_parse();
+
+  cell pubs_cell = ds~load_ref();
+  slice pubs_slice = pubs_cell.begin_parse();
+  pubkeys_dict = pubs_slice~load_dict();
+
+  cell beacons_cell = ds~load_ref();
+  slice beacons_slice = beacons_cell.begin_parse();
+  beacons_dict = beacons_slice~load_dict();
+
+  cell beacons_meta_cell = ds~load_ref();
+  slice beacons_meta_slice = beacons_meta_cell.begin_parse();
+  beacons_meta_dict = beacons_meta_slice~load_dict();
+
+  ;; cell adapter_cell = ds~load_ref();
+  ;; slice adapter_slice = adapter_cell.begin_parse();
+  ;; adapter_addr = adapter_slice~load_msg_addr();
+
+  ds.end_parse();
+}
+
+;; save_data stores storage variables as a cell into persistent storage
+() save_data() impure {
+  set_data(
+    begin_cell()
+        .store_ref(
+      begin_cell()
+                    .store_dict(pubkeys_dict)
+                .end_cell()
+    )
+        .store_ref(
+      begin_cell()
+                    .store_dict(beacons_dict)
+                .end_cell()
+    )
+        .store_ref(
+      begin_cell()
+                    .store_dict(beacons_meta_dict)
+                .end_cell()
+    )
+    ;; .store_ref(
+    ;;     begin_cell()
+    ;;         .store_slice(adapter_addr)
+    ;;     .end_cell()
+    ;; )
+        .end_cell()
+  );
+}
+
+
+() init_committee(slice in_msg_body) impure {
+  cell data = in_msg_body~load_ref();
+  slice data_slice = data.begin_parse();
+  cell committee_cell = data_slice~load_ref();
+  slice committee_slice = committee_cell.begin_parse();
+  pubkeys_dict = committee_slice~load_dict();
+  save_data();
+}
+
+() add_some_update(slice in_msg_body) impure {
+  ;; load beacon from msg
+  cell beacon = in_msg_body~load_ref();
+  int beacon_signature = get_beacon_hash(beacon);
+
+  ;; TODO: check if not empty
+  cell beacon_struct = begin_cell()
+      .store_ref(beacon)
+  .end_cell();
+  beacons_dict~udict_set(32 * 8, beacon_signature, beacon_struct.begin_parse());
+
+  cell beacon_meta_struct = begin_cell()
+      .store_ref(
+        begin_cell()
+          .store_uint(0, 16)
+          .store_ref(begin_cell().end_cell())
+        .end_cell()
+      )
+      .store_ref(
+        begin_cell()
+          .store_uint(0, 16)
+          .store_ref(begin_cell().end_cell())
+        .end_cell()
+        )
+  .end_cell();
+  beacons_meta_dict~udict_set(32 * 8, beacon_signature, beacon_meta_struct.begin_parse());
+
+  if (beacons_dict.dict_empty?()) {
+    throw(0x1111);
+    return();
+  }
+
+  save_data();
+}
+
+(slice) get_beacon_structure(int key_beacon_signature) impure {
+  (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, key_beacon_signature);
+
+  if (flag == 0) {
+    throw(0x1000);
+  }
+
+  return beacon_structure_slice;
+}

@@ -136,7 +136,7 @@ int bitLength(int n) impure {
   return res;
 }
 
-(int) merkelize_dict(cell chunks, int padFor, int count) impure {
+(int) merkelize_dict(cell chunks, int padFor, int count, int start_key) impure {
   int layerCount = bitLength(nextPowerOf2(padFor) - 1);
 
   if (count == 0) {
@@ -157,7 +157,7 @@ int bitLength(int n) impure {
       .store_uint(zeroHash(l), 32 * 8)
       .end_cell().begin_parse();
 
-      chunks~udict_set(32, chunkCount + i, zero_hash);
+      chunks~udict_set(32, chunkCount + i + start_key, zero_hash);
       i = i + 1;
     }
 
@@ -169,12 +169,12 @@ int bitLength(int n) impure {
       ;; (key, slice a,  flag) = chunks.udict_get_next?(32, key);
       ;; (key, slice b,  flag) = chunks.udict_get_next?(32, key);
 
-      (slice a, flag) = chunks.udict_get?(32, key * 2);
-      (slice b, flag) = chunks.udict_get?(32, (key * 2) + 1);
+      (slice a, flag) = chunks.udict_get?(32, key * 2 + start_key);
+      (slice b, flag) = chunks.udict_get?(32, (key * 2) + 1 + start_key);
 
       int sha_hash = sha_hash_2(a, b);
 
-      chunks~udict_set(32, key, begin_cell()
+      chunks~udict_set(32, key + start_key, begin_cell()
       .store_uint(sha_hash, 32 * 8)
       .end_cell().begin_parse());
 
@@ -185,7 +185,7 @@ int bitLength(int n) impure {
     l += 1;
   }
 
-  (slice res, int key) = chunks.udict_get?(32, 0);
+  (slice res, int key) = chunks.udict_get?(32, 0 + start_key);
   return res~load_uint(32 * 8);
 }
 
