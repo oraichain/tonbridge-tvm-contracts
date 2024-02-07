@@ -12,7 +12,8 @@
 
 ;; storage variables
 int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
-const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa;
+;; const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa;
+const domain = 0x07000000d31f6191ca65c836e170318c55fcf34b7e308f8fbca8e663bf565808;
 
 (int) get_beacon_bls_msg(cell beacon) impure {
     slice beacon_ssz = beacon.begin_parse();
@@ -400,6 +401,7 @@ const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0f
 
         if (is_signed) {
             cell execution = beacon_structure_slice~load_ref();
+            last_finality_hash = key_beacon_signature;
             if (beacon_structure_slice.slice_refs_empty?() == 0) {
                 ;; TODO: add check for committee
                 pubkeys_dict = beacon_structure_slice~load_ref();
@@ -431,7 +433,7 @@ const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0f
         slice key_slice = key_cell.begin_parse();
         int key_beacon_signature = key_slice~load_uint(32 * 8);
         (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, key_beacon_signature);
-        beacon_structure_slice = (beacon_structure_slice~load_ref()).begin_parse();
+        ;; beacon_structure_slice = (beacon_structure_slice~load_ref()).begin_parse();
 
         if (beacon_structure_slice.slice_data_empty?()) {
             throw(0x1111);
@@ -518,4 +520,18 @@ const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0f
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
+}
+
+
+(int) get_update_validation_status(slice beacon_hash_slice) method_id {
+    load_data();
+    int beacon_hash = beacon_hash_slice~load_uint(32 * 8);
+    slice beacon_structure_slice = get_beacon_structure(beacon_hash);
+    int res = beacon_structure_slice~load_uint(1);
+    return (res);
+}
+
+(int) get_last_filaity_hash() method_id {
+    load_data();
+    return (last_finality_hash);
 }

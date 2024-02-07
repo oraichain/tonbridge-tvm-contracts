@@ -344,6 +344,9 @@ describe('LightClient', () => {
         );
         console.log(initResult.transactions.map((t) => t.totalFees));
         // return;
+            console.log('get data from contract:');
+        // console.log(await lightClient.getBeaconValidationStatus(Buffer.from(firstUpdateBeaconSignature).toString('hex')))
+        // console.log(await lightClient.getLastFinalityHash());
 
         for (let i = 0; i < 4; i++) {
             const initResult = results[i];

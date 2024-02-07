@@ -170,9 +170,9 @@ global int topic_burn_id;
     }
 
     if(op == op::receipt_confirmed) {
-        if (equal_slices(sender_addr, light_client_addr) == 0) {
-            throw(0xffff);
-        }
+        ;; if (equal_slices(sender_addr, light_client_addr) == 0) {
+        ;;     throw(0xffff);
+        ;; }
 
         cell receipt = in_msg_body~load_ref();
         var receipt_slice = receipt.begin_parse();
@@ -183,10 +183,10 @@ global int topic_burn_id;
         (cell data_cell, int method) = parse_logs(log_cell);
         (int amount, slice address) = parse_receipt_data(data_cell);
 
-        cell log_body = begin_cell()
-            .store_slice(address)
-        .end_cell();
-        emit_log_simple(log::wrap, log_body, 0);
+        ;; cell log_body = begin_cell()
+        ;;     .store_slice(address)
+        ;; .end_cell();
+        ;; emit_log_simple(log::wrap, log_body, 0);
 
         if (method) {
             cell mint = begin_cell()
@@ -216,12 +216,13 @@ global int topic_burn_id;
                 .store_slice(mint.begin_parse())
             .end_cell(), 1); ;;TODO: WHAT CODE BETTER HERE
         } else {
+            ;; throw(1000);
             send_raw_message(begin_cell()
                 .store_uint(0x10, 6)
                 .store_slice(address)
                 .store_coins(amount)
-                .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-            .end_cell(), 0); ;;TODO: WHAT CODE BETTER HERE
+                .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .end_cell(), 1); ;;TODO: WHAT CODE BETTER HERE
         }
 
         return ();

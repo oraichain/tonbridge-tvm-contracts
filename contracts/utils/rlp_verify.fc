@@ -411,23 +411,23 @@ global int ctx_counter;
     int hash_res = hash.digest_keccak();
 
 
-        cell log_body = begin_cell()
-            .store_uint(hash_res, 256)
-            .store_uint(wanted_hash, 256)
-            .store_ref(
-                begin_cell()
-                .store_slice(proof_size_encoded_slice)
-                .end_cell()
-            )
-            .store_ref(
-                data_key
-            )
-            .store_ref(
-                data_cell
-            )
-        .end_cell();
+        ;; cell log_body = begin_cell()
+        ;;     .store_uint(hash_res, 256)
+        ;;     .store_uint(wanted_hash, 256)
+        ;;     .store_ref(
+        ;;         begin_cell()
+        ;;         .store_slice(proof_size_encoded_slice)
+        ;;         .end_cell()
+        ;;     )
+        ;;     .store_ref(
+        ;;         data_key
+        ;;     )
+        ;;     .store_ref(
+        ;;         data_cell
+        ;;     )
+        ;; .end_cell();
 
-        emit_log_simple(log::wrap, log_body, 0);
+        ;; emit_log_simple(log::wrap, log_body, 0);
 
     return hash_res == wanted_hash;
 }
@@ -503,12 +503,12 @@ global int ctx_counter;
         ;; }
         ;; else
 
-        cell log_body = begin_cell()
-            .store_uint(child_hash, 256)
-            .store_uint(wantedHash, 256)
-        .end_cell();
+        ;; cell log_body = begin_cell()
+        ;;     .store_uint(child_hash, 256)
+        ;;     .store_uint(wantedHash, 256)
+        ;; .end_cell();
 
-        emit_log_simple(log::wrap, log_body, 0);
+        ;; emit_log_simple(log::wrap, log_body, 0);
 
         wantedHash = child_hash;
 
@@ -558,12 +558,12 @@ global int ctx_counter;
         }
     }
 
-     cell log_body = begin_cell()
-            .store_uint(proof_type, 32)
-            .store_ref(proof)
-    .end_cell();
+    ;;  cell log_body = begin_cell()
+    ;;         .store_uint(proof_type, 32)
+    ;;         .store_ref(proof)
+    ;; .end_cell();
 
-    emit_log_simple(log::wrap, log_body, 0);
+    ;; emit_log_simple(log::wrap, log_body, 0);
 
     ;;     cell log_body = begin_cell()
     ;;         .store_uint(proof_slice.slice_refs_empty?(), 256)

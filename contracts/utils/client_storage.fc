@@ -7,6 +7,7 @@
 global cell beacons_dict;
 global cell pubkeys_dict;
 global cell beacons_meta_dict;
+global int last_finality_hash;
 ;; global slice adapter_addr;
 
 ;; load_data populates storage variables using stored data
@@ -25,9 +26,9 @@ global cell beacons_meta_dict;
   slice beacons_meta_slice = beacons_meta_cell.begin_parse();
   beacons_meta_dict = beacons_meta_slice~load_dict();
 
-  ;; cell adapter_cell = ds~load_ref();
-  ;; slice adapter_slice = adapter_cell.begin_parse();
-  ;; adapter_addr = adapter_slice~load_msg_addr();
+  cell last_finality_hash_cell = ds~load_ref();
+  slice last_finality_hash_slice = last_finality_hash_cell.begin_parse();
+  int last_finality_hash = last_finality_hash_slice~load_uint(32 * 8);
 
   ds.end_parse();
 }
@@ -51,11 +52,11 @@ global cell beacons_meta_dict;
                     .store_dict(beacons_meta_dict)
                 .end_cell()
     )
-    ;; .store_ref(
-    ;;     begin_cell()
-    ;;         .store_slice(adapter_addr)
-    ;;     .end_cell()
-    ;; )
+    .store_ref(
+        begin_cell()
+            .store_uint(last_finality_hash, 32 * 8)
+        .end_cell()
+    )
         .end_cell()
   );
 }

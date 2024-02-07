@@ -8,6 +8,7 @@ import {
     Dictionary,
     Sender,
     SendMode,
+    TupleItemSlice,
 } from 'ton-core';
 
 export type LightClientConfig = {
@@ -29,6 +30,7 @@ export function lightClientConfigToCell(config: LightClientConfig): Cell {
         .storeRef(beginCell().storeDict(CommitteeContent).endCell())
         .storeRef(beginCell().storeDict(BeaconsContent).endCell())
         .storeRef(beginCell().storeDict(BeaconsMetaContent).endCell())
+        .storeRef(beginCell().storeUint(0, 32 * 8).endCell())
         // .storeRef(
         //     adapterAddr ?
         //     beginCell()
@@ -314,5 +316,30 @@ export class LightClient implements Contract {
                 .storeRef(opts.receiptProof)
                 .endCell(),
         });
+    }
+
+    async getBeaconValidationStatus(provider: ContractProvider, hash: string) {
+        const state = await provider.getState();
+        if (state.state.type !== 'active') {
+            return { amount: 0n };
+        }
+        const { stack } = await provider.get('get_update_validation_status', [
+            {
+                type: 'slice',
+                cell: beginCell().storeBuffer(Buffer.from(hash, 'hex'), 32).endCell()
+            } as TupleItemSlice
+        ]);
+        const [isValid] = [stack.readNumber()];
+        return { isValid: isValid === 1 };
+    }
+
+    async getLastFinalityHash(provider: ContractProvider) {
+        const state = await provider.getState();
+        if (state.state.type !== 'active') {
+            return { amount: 0n };
+        }
+        const { stack } = await provider.get('get_last_filaity_hash', []);
+        const [hash] = [stack.readBigNumber().toString(16) ];
+        return { hash };
     }
 }
