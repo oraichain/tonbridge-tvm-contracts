@@ -78,6 +78,7 @@ global int last_finality_hash;
 
   ;; TODO: check if not empty
   cell beacon_struct = begin_cell()
+      .store_uint(0, 1)
       .store_ref(beacon)
   .end_cell();
   beacons_dict~udict_set(32 * 8, beacon_signature, beacon_struct.begin_parse());

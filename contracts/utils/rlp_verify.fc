@@ -448,6 +448,21 @@ global int ctx_counter;
     hash = keccak_proof(proof, hash);
     int hash_res = hash.digest_keccak();
 
+    ;; cell log_body = begin_cell()
+    ;;         .store_ref(
+    ;;             begin_cell()
+    ;;                 .store_uint(hash_res, 32 * 8)
+    ;;             .end_cell()
+    ;;         )
+    ;;         .store_ref(
+    ;;             begin_cell()
+    ;;                 .store_uint(wanted_hash, 32 * 8)
+    ;;             .end_cell()
+    ;;         )
+    ;;         .store_ref(proof)
+    ;;         .end_cell();
+
+    ;;     emit_log_simple(log::wrap, log_body, 0);
     return hash_res == wanted_hash;
 }
 
@@ -459,14 +474,22 @@ global int ctx_counter;
     return get_child_hash(cs~load_ref(), depth - 1);
 }
 
-() check_proof(cell proof, int wantedHash, int key, cell receipt) impure {
+(int) get_first_digits(int n) impure {
+    int res = n;
+    while((res == res & 15) == 0) {
+        res = res >> 4;
+    }
+    return res;
+}
+
+() check_proof(cell proof, int wantedHash, int key, cell receipt, int mask) impure {
     slice proofs_slice = proof.begin_parse();
     int proof_type = proofs_slice~load_uint(32);
     proof = proofs_slice~load_ref();
 
     if (proof_type == data:node_leaf) {
         if (compare_leaf_hash(proof, wantedHash) == 0) {
-            throw(999);
+            throw(990);
         }
     } elseif (compare_hash(proof, wantedHash) == 0) {
         throw(999);
@@ -483,8 +506,20 @@ global int ctx_counter;
             return ();
         }
 
-        int child_hash = get_child_hash(proof, key & 7);
-        key = key >> 4;
+        int child_hash = get_child_hash(proof, get_first_digits(key));
+        ;; cell log_body = begin_cell()
+        ;;     .store_uint(get_first_digits(key), 16)
+        ;;     .store_ref(
+        ;;         begin_cell()
+        ;;             .store_uint(key, 32)
+        ;;         .end_cell()
+        ;;     )
+        ;;     ;; .store_uint(wantedHash, 256)
+        ;; .end_cell();
+
+        ;; emit_log_simple(log::wrap, log_body, 0);
+        mask = mask >> 4;
+        key = key & mask;
 
         ;; if (childHash.length === 2) {
         ;;   const embeddedNode = new Node(childHash as any as Buffer[])
@@ -526,7 +561,8 @@ global int ctx_counter;
         }
 
         while(node_key > 0) {
-            key = key >> 4;
+            mask = mask >> 4;
+            key = key & mask;
             node_key = node_key >> 4;
         }
 
@@ -576,7 +612,7 @@ global int ctx_counter;
     ;;     emit_log_simple(log::wrap, log_body, 0);
 
     if(proofs_slice.slice_refs_empty?() == 0) {
-        return check_proof(proofs_slice~load_ref(), wantedHash, key, receipt);
+        return check_proof(proofs_slice~load_ref(), wantedHash, key, receipt, mask);
     }
 
     ;; if we expected this to be null and there is not further node since wantedHash is empty or we had a extension as last element, than it is ok not to find leafs
@@ -594,10 +630,21 @@ global int ctx_counter;
     ;; cell proof = in_msg_body~load_ref();
 
     slice path_slice = path_cell.begin_parse();
+    ;; cell log_body = begin_cell()
+    ;;         .store_uint(0x48, path_slice.slice_bits())
+    ;;     .end_cell();
+    ;; emit_log_simple(log::wrap, log_body, 0);
+
+    int mask = 0;
+    repeat(path_slice.slice_bits()) {
+        mask = (mask << 1) + 1;
+    }
     int key = path_slice~load_uint(path_slice.slice_bits());
+
+
 
     slice cs = root_hash.begin_parse();
     int wantedHash = cs~load_uint(256);
 
-    check_proof(proof, wantedHash, key, receipt);
+    check_proof(proof, wantedHash, key, receipt, mask);
 }

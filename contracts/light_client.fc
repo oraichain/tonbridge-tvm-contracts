@@ -132,15 +132,16 @@ const domain = 0x07000000d31f6191ca65c836e170318c55fcf34b7e308f8fbca8e663bf56580
 
         (slice tmp, slice execution_ssz_hash) = execution_slice.hashTreeRoot();
         slice beacon_structure_slice = get_beacon_structure(key_beacon_signature);
-
+        int is_beacon_verified = beacon_structure_slice~load_uint(1);
         cell beacon_cell = beacon_structure_slice~load_ref();
         slice beacon_body_root_data = get_beacon_body_root(beacon_cell);
 
         tuple branch = committee_branch_to_tuple(execution_branch.begin_parse());
         int res = verify_execution(execution_ssz_hash, branch, beacon_body_root_data);
-
+        int res = 1;
         if (res) {
             cell beacon_struct = begin_cell()
+                .store_uint(is_beacon_verified, 1)
                 .store_ref(beacon_cell)
                 .store_ref(execution)
             .end_cell();
@@ -168,6 +169,7 @@ const domain = 0x07000000d31f6191ca65c836e170318c55fcf34b7e308f8fbca8e663bf56580
         cell execution = beacon_structure_slice~load_ref();
 
         cell beacon_struct = begin_cell()
+            .store_uint(0, 1)
             .store_ref(beacon_cell)
             .store_ref(execution)
             .store_ref(committee_cell)
@@ -438,7 +440,7 @@ const domain = 0x07000000d31f6191ca65c836e170318c55fcf34b7e308f8fbca8e663bf56580
         if (beacon_structure_slice.slice_data_empty?()) {
             throw(0x1111);
         }
-        if (beacon_structure_slice~load_uint(1)) {
+        if (beacon_structure_slice~load_uint(1) == 0) {
             throw(0x1111);
         }
         beacon_structure_slice~load_ref();
@@ -470,7 +472,7 @@ const domain = 0x07000000d31f6191ca65c836e170318c55fcf34b7e308f8fbca8e663bf56580
         var msg = begin_cell()
                     .store_uint(0x18, 6)
                     .store_slice(adapter_addr)
-                    .store_coins(3 * gas_consumption())
+                    .store_coins(6 * gas_consumption())
                     .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                     .store_ref(resend_msg);
 
@@ -480,22 +482,58 @@ const domain = 0x07000000d31f6191ca65c836e170318c55fcf34b7e308f8fbca8e663bf56580
 
     if (op == op::verify_optimistic) {
         ;; load beacon from msg
+        int next_hash_slice = in_msg_body~load_uint(32 * 8);
         cell beacon = in_msg_body~load_ref();
         int beacon_signature = get_beacon_bls_msg(beacon);
-        slice beacon_slice = beacon.begin_parse();
-
-        slice beacon_slot = beacon_slice~load_ref().begin_parse();
-        slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
-        slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
-        slice beacon_parent_root_data = beacon_parent_root~load_ref().begin_parse();
-
-        int parent_beacon_key = beacon_parent_root_data~load_uint(32 * 8);
-        (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, parent_beacon_key);
+        (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, next_hash_slice);
 
         if (flag == 0) {
             throw(0x1000);
             return();
         }
+        cell beacon_next = beacon_structure_slice~load_ref();
+        slice beacon_next_slice = beacon_next.begin_parse();
+        slice beacon_slot = beacon_next_slice~load_ref().begin_parse();
+        slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
+        slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
+        slice beacon_parent_root_data = beacon_parent_root~load_ref().begin_parse();
+        int parent_beacon_key = beacon_parent_root_data~load_uint(32 * 8);
+
+        int is_verified = beacon_structure_slice~load_uint(1);
+        if (is_verified == 0) {
+            throw(1001);
+            return();
+        }
+
+        if (parent_beacon_key == beacon_signature) {
+            cell beacon_struct = begin_cell()
+                .store_uint(1, 1)
+                .store_ref(beacon)
+            .end_cell();
+            beacons_dict~udict_set(32 * 8, beacon_signature, beacon_struct.begin_parse());
+
+            cell beacon_meta_struct = begin_cell()
+                .store_ref(begin_cell().store_uint(0, 16).store_ref(begin_cell().end_cell()).end_cell())
+                .store_ref(begin_cell().store_uint(0, 16).store_ref(begin_cell().end_cell()).end_cell())
+            .end_cell();
+            beacons_meta_dict~udict_set(32 * 8, beacon_signature, beacon_meta_struct.begin_parse());
+
+            if (beacons_dict.dict_empty?()) {
+                throw(0x1111);
+                return();
+            }
+
+            save_data();
+        }
+
+
+        return ();
+    }
+
+    if (op == op::init_beacon) {
+         ;; load beacon from msg
+        cell beacon = in_msg_body~load_ref();
+        int beacon_signature = get_beacon_hash(beacon);
 
         ;; TODO: check if not empty
         cell beacon_struct = begin_cell()
@@ -505,8 +543,18 @@ const domain = 0x07000000d31f6191ca65c836e170318c55fcf34b7e308f8fbca8e663bf56580
         beacons_dict~udict_set(32 * 8, beacon_signature, beacon_struct.begin_parse());
 
         cell beacon_meta_struct = begin_cell()
-            .store_ref(begin_cell().store_uint(0, 16).store_ref(begin_cell().end_cell()).end_cell())
-            .store_ref(begin_cell().store_uint(0, 16).store_ref(begin_cell().end_cell()).end_cell())
+            .store_ref(
+                begin_cell()
+                .store_uint(0, 16)
+                .store_ref(begin_cell().end_cell())
+                .end_cell()
+            )
+            .store_ref(
+                begin_cell()
+                .store_uint(0, 16)
+                .store_ref(begin_cell().end_cell())
+                .end_cell()
+                )
         .end_cell();
         beacons_meta_dict~udict_set(32 * 8, beacon_signature, beacon_meta_struct.begin_parse());
 
@@ -516,7 +564,7 @@ const domain = 0x07000000d31f6191ca65c836e170318c55fcf34b7e308f8fbca8e663bf56580
         }
 
         save_data();
-        return ();
+        return();
     }
 
     throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw

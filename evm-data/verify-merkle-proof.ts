@@ -64,6 +64,7 @@ export async function verifyMerkleProof(
     const hash = keccak(p)
 
     // verify the hash of the node
+    console.log('COMPARE' , hash.toString('hex'), wantedHash.toString('hex'), p.toString('hex'))
     if (Buffer.compare(hash, wantedHash)) {
       console.log(hash.toString('hex'), wantedHash.toString('hex'))
       throw new Error('Bad proof node ' + i + ': hash mismatch')
@@ -93,6 +94,7 @@ export async function verifyMerkleProof(
 
         // find the childHash
         const childHash = node.raw[key[0]] as Buffer
+        console.log('DEPTH:', key[0]);
         // remove the first item
         key.splice(0, 1)
 

@@ -20,3 +20,5 @@ const op::verify_committee = "verify_committee"c;
 
 const op::verify_optimistic = "verify_optimistic"c;
 const op::aggregate_pubkey = "aggregate_pubkey"c;
+
+const op::init_beacon = "init_beacon"c;

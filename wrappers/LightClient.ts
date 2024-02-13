@@ -59,6 +59,7 @@ export const Opcodes = {
     verify_committee: 0xad76635c,
     verify_optimistic: 0xb5507839,
     aggregate_pubkey: 0x58198c64,
+    init_beacon: 0x17fd941d,
 };
 
 export class LightClient implements Contract {
@@ -103,7 +104,7 @@ export class LightClient implements Contract {
         });
     }
 
-    async sendAddOptimisticUpdate(
+    async sendInitOptimisticUpdate(
         provider: ContractProvider,
         via: Sender,
         opts: {
@@ -111,6 +112,27 @@ export class LightClient implements Contract {
             value: bigint;
             queryID?: number;
             beacon: Cell
+        }
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.init_beacon, 32)
+                .storeUint(opts.queryID ?? 0, 64)
+                .storeRef(opts.beacon)
+                .endCell(),
+        });
+    }
+
+    async sendAddOptimisticUpdate(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+
+            value: bigint;
+            queryID?: number;
+            beacon: Cell;
         }
     ) {
         await provider.internal(via, {
@@ -131,7 +153,8 @@ export class LightClient implements Contract {
 
             value: bigint;
             queryID?: number;
-            beacon: Cell
+            beacon: Cell;
+            nextHash: string;
         }
     ) {
         await provider.internal(via, {
@@ -140,6 +163,7 @@ export class LightClient implements Contract {
             body: beginCell()
                 .storeUint(Opcodes.verify_optimistic, 32)
                 .storeUint(opts.queryID ?? 0, 64)
+                .storeBuffer(Buffer.from(opts.nextHash.slice(2), 'hex'))
                 .storeRef(opts.beacon)
                 .endCell(),
         });

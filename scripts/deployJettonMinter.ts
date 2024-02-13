@@ -4,7 +4,7 @@ import {sha256} from 'ton-crypto';
 import {Adapter} from '../wrappers/Adapter';
 import {JettonMinter} from '../wrappers/JettonMinter';
 
-const adapter_addr = Address.parse('EQD70meQJIMqrAmIrR-sMZhY2y6JSVyCfyuBGKbWBcpIKoco');
+const adapter_addr = Address.parse('EQBXGmE4yMbdaljWGMfiYkAvOm3YpmY4WAOzFoK3L01iaMXp');
 
 export async function run(provider: NetworkProvider) {
 
@@ -14,7 +14,7 @@ export async function run(provider: NetworkProvider) {
         jETHContent
             .set(
                 BigInt('0x' + (await sha256('name')).toString('hex')),
-                beginCell().storeUint(0x00, 8).storeBuffer(Buffer.from('bETH', 'utf8')).endCell()
+                beginCell().storeUint(0x00, 8).storeBuffer(Buffer.from('wETH', 'utf8')).endCell()
             )
             .set(
                 BigInt('0x' + (await sha256('decimals')).toString('hex')),
