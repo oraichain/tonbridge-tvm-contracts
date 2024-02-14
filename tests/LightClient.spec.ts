@@ -1,4 +1,4 @@
-import {ByteListType, ByteVectorType} from '@chainsafe/ssz';
+import {ByteListType, ByteVectorType, getUint8ByteToBitBooleanArray} from '@chainsafe/ssz';
 import {compile} from '@ton-community/blueprint';
 import {Blockchain, SandboxContract} from '@ton-community/sandbox';
 import '@ton-community/test-utils';
@@ -18,6 +18,7 @@ import J3905474 from './mock/476/122046/3905474.fake.json';
 import J3905475 from './mock/476/122046/3905475.fake.json';
 import AllCommittees from './mock/upates.475.json';
 import UpdatesJson from './ssz/finally_update.json';
+import {getExecutionContainerCell} from './ssz/finally_update.mock';
 import {
     BYTES_PER_LOGS_BLOOM,
     BeaconBlockHeader,
@@ -317,184 +318,184 @@ describe('LightClient', () => {
         });
     });
 
-    // it('should store execution', async () => {
-    //     const user = await blockchain.treasury('user');
+    it('should store execution', async () => {
+        const user = await blockchain.treasury('user');
 
-    //     const executionCell = getExecutionContainerCell(firstUpdateExecution.execution);
-    //     let execution_branch_cell!: Cell;
-    //     for (let i = 0; i < firstUpdateExecution.execution_branch.length; i++) {
-    //         const branch_item = firstUpdateExecution.execution_branch[i];
-    //         if (!execution_branch_cell) {
-    //             execution_branch_cell = beginCell().storeBuffer(bytes(branch_item)).endCell();
-    //         } else {
-    //             execution_branch_cell = beginCell()
-    //                 .storeBuffer(bytes(branch_item))
-    //                 .storeRef(execution_branch_cell)
-    //                 .endCell();
-    //         }
-    //     }
+        const executionCell = getExecutionContainerCell(firstUpdateExecution.execution);
+        let execution_branch_cell!: Cell;
+        for (let i = 0; i < firstUpdateExecution.execution_branch.length; i++) {
+            const branch_item = firstUpdateExecution.execution_branch[i];
+            if (!execution_branch_cell) {
+                execution_branch_cell = beginCell().storeBuffer(bytes(branch_item)).endCell();
+            } else {
+                execution_branch_cell = beginCell()
+                    .storeBuffer(bytes(branch_item))
+                    .storeRef(execution_branch_cell)
+                    .endCell();
+            }
+        }
 
-    //     const initResult = await lightClient.sendUpdateReceipt(user.getSender(), {
-    //         value: toNano('15.05'),
-    //         execution: executionCell,
-    //         execution_branch: execution_branch_cell,
-    //         beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
-    //     });
+        const initResult = await lightClient.sendUpdateReceipt(user.getSender(), {
+            value: toNano('15.05'),
+            execution: executionCell,
+            execution_branch: execution_branch_cell,
+            beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
+        });
 
-    //     // const externalOutBodySlice = initResult.externals.map(ex => ex.body.asSlice());
-    //     // console.log(initResult.transactions.map(t => t.vmLogs));
-    //     // console.log(externalOutBodySlice);
-    //     const externalOutBodySlice = initResult.externals.map((ex) => ex.body.asSlice());
-    //     console.log(initResult.transactions.map((t) => t.totalFees));
-    //     console.log('hash:', Buffer.from(t1Hash).toString('hex'));
+        // const externalOutBodySlice = initResult.externals.map(ex => ex.body.asSlice());
+        // console.log(initResult.transactions.map(t => t.vmLogs));
+        // console.log(externalOutBodySlice);
+        const externalOutBodySlice = initResult.externals.map((ex) => ex.body.asSlice());
+        console.log(initResult.transactions.map((t) => t.totalFees));
+        console.log('hash:', Buffer.from(t1Hash).toString('hex'));
 
-    //     expect(initResult.transactions).toHaveTransaction({
-    //         from: user.address,
-    //         to: lightClient.address,
-    //         success: true,
-    //     });
-    // });
+        expect(initResult.transactions).toHaveTransaction({
+            from: user.address,
+            to: lightClient.address,
+            success: true,
+        });
+    });
 
-    // it('should store next sync committee', async () => {
-    //     const user = await blockchain.treasury('user');
+    it('should store next sync committee', async () => {
+        const user = await blockchain.treasury('user');
 
-    //     let committee_branch_cell!: Cell;
-    //     for (let i = 0; i < UpdatesJson[1].data.next_sync_committee_branch.length; i++) {
-    //         const branch_item = UpdatesJson[1].data.next_sync_committee_branch[i];
-    //         if (!committee_branch_cell) {
-    //             committee_branch_cell = beginCell().storeBuffer(bytes(branch_item)).endCell();
-    //         } else {
-    //             committee_branch_cell = beginCell()
-    //                 .storeBuffer(bytes(branch_item))
-    //                 .storeRef(committee_branch_cell)
-    //                 .endCell();
-    //         }
-    //     }
+        let committee_branch_cell!: Cell;
+        for (let i = 0; i < UpdatesJson[1].data.next_sync_committee_branch.length; i++) {
+            const branch_item = UpdatesJson[1].data.next_sync_committee_branch[i];
+            if (!committee_branch_cell) {
+                committee_branch_cell = beginCell().storeBuffer(bytes(branch_item)).endCell();
+            } else {
+                committee_branch_cell = beginCell()
+                    .storeBuffer(bytes(branch_item))
+                    .storeRef(committee_branch_cell)
+                    .endCell();
+            }
+        }
 
-    //     const results = [];
+        const results = [];
 
-    //     const initResult = await lightClient.sendNextCommittee(user.getSender(), {
-    //         value: toNano('11.05'),
-    //         committee: committeeToCell(UpdatesJson[1].data.next_sync_committee),
-    //         // committee_branch: committee_branch_cell,
-    //         beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
-    //     });
+        const initResult = await lightClient.sendNextCommittee(user.getSender(), {
+            value: toNano('11.05'),
+            committee: committeeToCell(UpdatesJson[1].data.next_sync_committee),
+            // committee_branch: committee_branch_cell,
+            beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
+        });
 
-    //     for (let i = 0; i < 16; i++) {
-    //         const initResult2 = await lightClient.sendCalcNextCommitteeHash(user.getSender(), {
-    //             value: toNano('11.05'),
-    //             // committee: committeeToCell(UpdatesJson[1].data.next_sync_committee),
-    //             // committee_branch: committee_branch_cell,
-    //             beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
-    //         });
-    //         results.push(initResult2);
-    //     }
+        for (let i = 0; i < 16; i++) {
+            const initResult2 = await lightClient.sendCalcNextCommitteeHash(user.getSender(), {
+                value: toNano('11.05'),
+                // committee: committeeToCell(UpdatesJson[1].data.next_sync_committee),
+                // committee_branch: committee_branch_cell,
+                beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
+            });
+            results.push(initResult2);
+        }
 
-    //     const initResult3 = await lightClient.sendVerifyNextCommittee(user.getSender(), {
-    //         value: toNano('11.05'),
-    //         committee: committeeToCell(UpdatesJson[1].data.next_sync_committee, true),
-    //         committee_branch: committee_branch_cell,
-    //         beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
-    //     });
-    //     // const externalOutBodySlice = initResult.externals.map(ex => ex.body.asSlice());
-    //     console.log(
-    //         'sendNextCommittee',
-    //         initResult.transactions.map((t) => t.totalFees)
-    //     );
-    //     console.log(
-    //         'sendCalcNextCommitteeHash',
-    //         results.map((initResult) => initResult.transactions.map((t) => t.totalFees))
-    //     );
-    //     console.log(
-    //         'sendVerifyNextCommittee',
-    //         initResult3.transactions.map((t) => t.totalFees)
-    //     );
-    //     // const externalOutBodySlice = results[15].externals.map(ex => ex.body.asSlice());
-    //     // console.log(initResult3.transactions.map(t => t.vmLogs));
-    //     // const externalOutBodySlice = initResult3.externals.map(ex => ex.body.asSlice());
-    //     // console.log(externalOutBodySlice);
+        const initResult3 = await lightClient.sendVerifyNextCommittee(user.getSender(), {
+            value: toNano('11.05'),
+            committee: committeeToCell(UpdatesJson[1].data.next_sync_committee, true),
+            committee_branch: committee_branch_cell,
+            beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
+        });
+        // const externalOutBodySlice = initResult.externals.map(ex => ex.body.asSlice());
+        console.log(
+            'sendNextCommittee',
+            initResult.transactions.map((t) => t.totalFees)
+        );
+        console.log(
+            'sendCalcNextCommitteeHash',
+            results.map((initResult) => initResult.transactions.map((t) => t.totalFees))
+        );
+        console.log(
+            'sendVerifyNextCommittee',
+            initResult3.transactions.map((t) => t.totalFees)
+        );
+        // const externalOutBodySlice = results[15].externals.map(ex => ex.body.asSlice());
+        // console.log(initResult3.transactions.map(t => t.vmLogs));
+        // const externalOutBodySlice = initResult3.externals.map(ex => ex.body.asSlice());
+        // console.log(externalOutBodySlice);
 
-    //     expect(initResult.transactions).toHaveTransaction({
-    //         from: user.address,
-    //         to: lightClient.address,
-    //         success: true,
-    //     });
+        expect(initResult.transactions).toHaveTransaction({
+            from: user.address,
+            to: lightClient.address,
+            success: true,
+        });
 
-    //     for (let i = 0; i < 16; i++) {
-    //         const initResult = results[i];
-    //         expect(initResult.transactions).toHaveTransaction({
-    //             from: user.address,
-    //             to: lightClient.address,
-    //             success: true,
-    //         });
-    //     }
+        for (let i = 0; i < 16; i++) {
+            const initResult = results[i];
+            expect(initResult.transactions).toHaveTransaction({
+                from: user.address,
+                to: lightClient.address,
+                success: true,
+            });
+        }
 
-    //     expect(initResult3.transactions).toHaveTransaction({
-    //         from: user.address,
-    //         to: lightClient.address,
-    //         success: true,
-    //     });
-    // });
+        expect(initResult3.transactions).toHaveTransaction({
+            from: user.address,
+            to: lightClient.address,
+            success: true,
+        });
+    });
 
-    // it('should verify signature and update committee', async () => {
-    //     const user = await blockchain.treasury('user');
+    it('should verify signature and update committee', async () => {
+        const user = await blockchain.treasury('user');
 
-    //     let fixedCommitteeBits = '';
+        let fixedCommitteeBits = '';
 
-    //     bytes(UpdatesJson[1].data.sync_aggregate.sync_committee_bits).forEach((el) => {
-    //         const a = getUint8ByteToBitBooleanArray(el);
-    //         fixedCommitteeBits += parseInt(a.map((el) => (el ? 1 : 0)).join(''), 2).toString(16);
-    //     });
+        bytes(UpdatesJson[1].data.sync_aggregate.sync_committee_bits).forEach((el) => {
+            const a = getUint8ByteToBitBooleanArray(el);
+            fixedCommitteeBits += parseInt(a.map((el) => (el ? 1 : 0)).join(''), 2).toString(16);
+        });
 
-    //     const results = [];
-    //     for (let i = 0; i < 4; i++) {
-    //         const initResult2 = await lightClient.sendAggregatePubkey(user.getSender(), {
-    //             value: toNano('11.05'),
-    //             aggregate: syncAggregateToCell({
-    //                 ...UpdatesJson[1].data.sync_aggregate,
-    //                 sync_committee_bits: '0x' + fixedCommitteeBits,
-    //             }),
-    //             beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
-    //         });
-    //         results.push(initResult2);
-    //     }
+        const results = [];
+        for (let i = 0; i < 4; i++) {
+            const initResult2 = await lightClient.sendAggregatePubkey(user.getSender(), {
+                value: toNano('11.05'),
+                aggregate: syncAggregateToCell({
+                    ...UpdatesJson[1].data.sync_aggregate,
+                    sync_committee_bits: '0x' + fixedCommitteeBits,
+                }),
+                beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
+            });
+            results.push(initResult2);
+        }
 
-    //     const initResult = await lightClient.sendFinalityUpdate(user.getSender(), {
-    //         value: toNano('15.00'),
-    //         aggregate: syncAggregateToCell({
-    //             ...UpdatesJson[1].data.sync_aggregate,
-    //             sync_committee_bits: '0x' + fixedCommitteeBits,
-    //         }),
-    //         beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
-    //     });
+        const initResult = await lightClient.sendFinalityUpdate(user.getSender(), {
+            value: toNano('15.00'),
+            aggregate: syncAggregateToCell({
+                ...UpdatesJson[1].data.sync_aggregate,
+                sync_committee_bits: '0x' + fixedCommitteeBits,
+            }),
+            beacon_hash: beginCell().storeBuffer(Buffer.from(firstUpdateBeaconSignature)).endCell(),
+        });
 
-    //     // const externalOutBodySlice = initResult.externals.map(ex => ex.body.asSlice());
-    //     // console.log(initResult.transactions.map(t => t.vmLogs));
-    //     console.log(
-    //         'sendAggregatePubkeys',
-    //         results.map((initResult) => initResult.transactions.map((t) => t.totalFees))
-    //     );
-    //     console.log(initResult.transactions.map((t) => t.totalFees));
-    //     // return;
-    //     console.log('get data from contract:');
-    //     // console.log(await lightClient.getBeaconValidationStatus(Buffer.from(firstUpdateBeaconSignature).toString('hex')))
-    //     // console.log(await lightClient.getLastFinalityHash());
+        // const externalOutBodySlice = initResult.externals.map(ex => ex.body.asSlice());
+        // console.log(initResult.transactions.map(t => t.vmLogs));
+        console.log(
+            'sendAggregatePubkeys',
+            results.map((initResult) => initResult.transactions.map((t) => t.totalFees))
+        );
+        console.log(initResult.transactions.map((t) => t.totalFees));
+        // return;
+        console.log('get data from contract:');
+        // console.log(await lightClient.getBeaconValidationStatus(Buffer.from(firstUpdateBeaconSignature).toString('hex')))
+        // console.log(await lightClient.getLastFinalityHash());
 
-    //     for (let i = 0; i < 4; i++) {
-    //         const initResult = results[i];
-    //         expect(initResult.transactions).toHaveTransaction({
-    //             from: user.address,
-    //             to: lightClient.address,
-    //             success: true,
-    //         });
-    //     }
+        for (let i = 0; i < 4; i++) {
+            const initResult = results[i];
+            expect(initResult.transactions).toHaveTransaction({
+                from: user.address,
+                to: lightClient.address,
+                success: true,
+            });
+        }
 
-    //     // expect(initResult.transactions).toHaveTransaction({
-    //     //     from: user.address,
-    //     //     to: lightClient.address,
-    //     //     success: true,
-    //     // });
-    // });
+        // expect(initResult.transactions).toHaveTransaction({
+        //     from: user.address,
+        //     to: lightClient.address,
+        //     success: true,
+        // });
+    });
 
     it('should verify and try run receipt', async () => {
         const beaconContainerCell = getSSZContainer(
@@ -562,7 +563,7 @@ describe('LightClient', () => {
                     topic_burn_id: burn_topic,
                     light_client_addr: lightClient.address,
                 },
-                code
+                adapterCode
             )
         );
 
@@ -695,8 +696,10 @@ describe('LightClient', () => {
                 .endCell(),
         });
 
-        console.log(callback.transactions.map((t) => t.totalFees));
-        console.log(callback.transactions.map((t) => t.vmLogs));
+        console.log(cell);
+
+        // console.log(callback.transactions.map((t) => t.totalFees));
+        // console.log(callback.transactions.filter(t => t.outMessages).map((t) => t.blockchainLogs));
         const externalOutBodySlice = callback.externals.map((ex) => ex.body.asSlice());
         console.log(externalOutBodySlice);
 
@@ -723,182 +726,188 @@ describe('LightClient', () => {
             to: adapter.address,
             success: true,
         });
+
+        expect(callback.transactions).toHaveTransaction({
+            from: adapter.address,
+            to: jettonMinter.address,
+            success: true,
+        });
     });
 
-    // it('should verify optimistic updata', async () => {
-    //     blockchain = await Blockchain.create();
+    it('should verify optimistic updata', async () => {
+        blockchain = await Blockchain.create();
 
-    //     lightClient = blockchain.openContract(LightClient.createFromConfig({}, code));
+        lightClient = blockchain.openContract(LightClient.createFromConfig({}, code));
 
-    //     const deployer = await blockchain.treasury('deployer');
-    //     const admin = await blockchain.treasury('admin');
-    //     const user = await blockchain.treasury('user');
+        const deployer = await blockchain.treasury('deployer');
+        const admin = await blockchain.treasury('admin');
+        const user = await blockchain.treasury('user');
 
-    //     const deployResult = await lightClient.sendDeploy(deployer.getSender(), toNano('0.05'));
+        const deployResult = await lightClient.sendDeploy(deployer.getSender(), toNano('0.05'));
 
-    //     expect(deployResult.transactions).toHaveTransaction({
-    //         from: deployer.address,
-    //         to: lightClient.address,
-    //         deploy: true,
-    //         success: true,
-    //     });
+        expect(deployResult.transactions).toHaveTransaction({
+            from: deployer.address,
+            to: lightClient.address,
+            deploy: true,
+            success: true,
+        });
 
-    //     const initResult = await lightClient.sendInitCommittee(user.getSender(), {
-    //         value: toNano('15.05'),
-    //         committee: committeeToCell(t1initialCommittee),
-    //     });
+        const initResult = await lightClient.sendInitCommittee(user.getSender(), {
+            value: toNano('15.05'),
+            committee: committeeToCell(t1initialCommittee),
+        });
 
-    //     const beaconContainerCell = getSSZContainer(
-    //         SSZUintToCell(
-    //             { value: +t1firstUpdateBeacon.slot, size: 8, isInf: true },
-    //             SSZUintToCell(
-    //                 { value: +t1firstUpdateBeacon.proposerIndex, size: 8, isInf: false },
-    //                 SSZRootToCell(
-    //                     '0x' + t1firstUpdateBeacon.parentRoot,
-    //                     SSZRootToCell(
-    //                         '0x' + t1firstUpdateBeacon.stateRoot,
-    //                         SSZRootToCell('0x' + t1firstUpdateBeacon.bodyRoot)
-    //                     )
-    //                 )
-    //             )
-    //         )
-    //     );
+        const beaconContainerCell = getSSZContainer(
+            SSZUintToCell(
+                { value: +t1firstUpdateBeacon.slot, size: 8, isInf: true },
+                SSZUintToCell(
+                    { value: +t1firstUpdateBeacon.proposerIndex, size: 8, isInf: false },
+                    SSZRootToCell(
+                        '0x' + t1firstUpdateBeacon.parentRoot,
+                        SSZRootToCell(
+                            '0x' + t1firstUpdateBeacon.stateRoot,
+                            SSZRootToCell('0x' + t1firstUpdateBeacon.bodyRoot)
+                        )
+                    )
+                )
+            )
+        );
 
-    //     const initResult2 = await lightClient.sendAddOptimisticUpdate(user.getSender(), {
-    //         value: toNano('15.05'),
-    //         beacon: beaconContainerCell,
-    //     });
+        const initResult2 = await lightClient.sendAddOptimisticUpdate(user.getSender(), {
+            value: toNano('15.05'),
+            beacon: beaconContainerCell,
+        });
 
-    //     expect(initResult2.transactions).toHaveTransaction({
-    //         from: user.address,
-    //         to: lightClient.address,
-    //         success: true,
-    //     });
-    // });
+        expect(initResult2.transactions).toHaveTransaction({
+            from: user.address,
+            to: lightClient.address,
+            success: true,
+        });
+    });
 
-    // it('should store beacon 2', async () => {
-    //     const user = await blockchain.treasury('user');
+    it('should store beacon 2', async () => {
+        const user = await blockchain.treasury('user');
 
-    //     const secondUpdateBeacon = {
-    //         slot: 4332576,
-    //         proposerIndex: 439,
-    //         parentRoot: '0x00c4f2062883b2bab0c8d9ab4e3908bdabda50016066c31de1afae6f0dbf72fe',
-    //         stateRoot: '0xf911140bdf71cd55f9a23a1269730b60349c8c51057b8bf79f19cd1f46466fee',
-    //         bodyRoot: '0x105109efd5676f1e91d4838c723b9e61204d95d60bb7a5016fa50bfc8beb0b64',
-    //         selfHash: '0xf15f8da67b5fe0660319c05ebc9cc85cfc92de41f6bebf778bf661817f6da5fb',
-    //     };
+        const secondUpdateBeacon = {
+            slot: 4332576,
+            proposerIndex: 439,
+            parentRoot: '0x00c4f2062883b2bab0c8d9ab4e3908bdabda50016066c31de1afae6f0dbf72fe',
+            stateRoot: '0xf911140bdf71cd55f9a23a1269730b60349c8c51057b8bf79f19cd1f46466fee',
+            bodyRoot: '0x105109efd5676f1e91d4838c723b9e61204d95d60bb7a5016fa50bfc8beb0b64',
+            selfHash: '0xf15f8da67b5fe0660319c05ebc9cc85cfc92de41f6bebf778bf661817f6da5fb',
+        };
 
-    //     const beaconContainerCell = getSSZContainer(
-    //         SSZUintToCell(
-    //             { value: +secondUpdateBeacon.slot, size: 8, isInf: true },
-    //             SSZUintToCell(
-    //                 { value: +secondUpdateBeacon.proposerIndex, size: 8, isInf: false },
-    //                 SSZRootToCell(
-    //                     secondUpdateBeacon.parentRoot,
-    //                     SSZRootToCell(secondUpdateBeacon.stateRoot, SSZRootToCell(secondUpdateBeacon.bodyRoot))
-    //                 )
-    //             )
-    //         )
-    //     );
+        const beaconContainerCell = getSSZContainer(
+            SSZUintToCell(
+                { value: +secondUpdateBeacon.slot, size: 8, isInf: true },
+                SSZUintToCell(
+                    { value: +secondUpdateBeacon.proposerIndex, size: 8, isInf: false },
+                    SSZRootToCell(
+                        secondUpdateBeacon.parentRoot,
+                        SSZRootToCell(secondUpdateBeacon.stateRoot, SSZRootToCell(secondUpdateBeacon.bodyRoot))
+                    )
+                )
+            )
+        );
 
-    //     // console.log(beaconContainerCell);
+        // console.log(beaconContainerCell);
 
-    //     const initResult = await lightClient.sendInitOptimisticUpdate(user.getSender(), {
-    //         value: toNano('0.07'),
-    //         beacon: beaconContainerCell,
-    //     });
+        const initResult = await lightClient.sendInitOptimisticUpdate(user.getSender(), {
+            value: toNano('0.07'),
+            beacon: beaconContainerCell,
+        });
 
-    //     const externalOutBodySlice = initResult.externals.map((ex) => ex.body.asSlice());
-    //     console.log(initResult.transactions.map((t) => t.totalFees));
+        const externalOutBodySlice = initResult.externals.map((ex) => ex.body.asSlice());
+        console.log(initResult.transactions.map((t) => t.totalFees));
 
-    //     expect(initResult.transactions).toHaveTransaction({
-    //         from: user.address,
-    //         to: lightClient.address,
-    //         success: true,
-    //     });
-    // });
+        expect(initResult.transactions).toHaveTransaction({
+            from: user.address,
+            to: lightClient.address,
+            success: true,
+        });
+    });
 
-    // it('should check optimistics', async () => {
-    //     const user = await blockchain.treasury('user4');
+    it('should check optimistics', async () => {
+        const user = await blockchain.treasury('user4');
 
-    //     const firstUpdateBeacon = {
-    //         id: 366,
-    //         slot: 4332192,
-    //         proposerIndex: 1028,
-    //         parentRoot: '0x921eb3e1d8bdb0bbb4b8b95bb03de6846e6f88314018303d09786490c9e5dfc4',
-    //         stateRoot: '0xa4b069ddd65e8119df1713a4137f2c69cf6ec9c423a6f6cb597c5c118efc1d94',
-    //         bodyRoot: '0x184b55cba5f1fbffe11151ae8c2517f763d5f831c616d79145a595f49c88519b',
-    //         selfHash: '0x850331c820759287b3ddcf1d83ddeef21bfa7f8cc5ed367f0cdc6315e5241ae8',
-    //         isFinality: true,
-    //         ParentBeaconId: 365,
-    //     };
+        const firstUpdateBeacon = {
+            id: 366,
+            slot: 4332192,
+            proposerIndex: 1028,
+            parentRoot: '0x921eb3e1d8bdb0bbb4b8b95bb03de6846e6f88314018303d09786490c9e5dfc4',
+            stateRoot: '0xa4b069ddd65e8119df1713a4137f2c69cf6ec9c423a6f6cb597c5c118efc1d94',
+            bodyRoot: '0x184b55cba5f1fbffe11151ae8c2517f763d5f831c616d79145a595f49c88519b',
+            selfHash: '0x850331c820759287b3ddcf1d83ddeef21bfa7f8cc5ed367f0cdc6315e5241ae8',
+            isFinality: true,
+            ParentBeaconId: 365,
+        };
 
-    //     const secondUpdateBeacon = {
-    //         id: 365,
-    //         slot: 4332191,
-    //         proposerIndex: 46,
-    //         parentRoot: '0xdda2b23b9d12195ed50688a7adc36e361225c7ce73468d0edbf398ef6115f6d4',
-    //         stateRoot: '0x2a2e3326e14d23bc338189de68f6792e2e5e55b35092456f80ddeececa58b7fc',
-    //         bodyRoot: '0x29eba33559030317dff3c76e09852aaae1cbe262cdf577968a04a101dd0820db',
-    //         selfHash: '0x921eb3e1d8bdb0bbb4b8b95bb03de6846e6f88314018303d09786490c9e5dfc4',
-    //         isFinality: false,
-    //         ParentBeaconId: 364,
-    //     };
+        const secondUpdateBeacon = {
+            id: 365,
+            slot: 4332191,
+            proposerIndex: 46,
+            parentRoot: '0xdda2b23b9d12195ed50688a7adc36e361225c7ce73468d0edbf398ef6115f6d4',
+            stateRoot: '0x2a2e3326e14d23bc338189de68f6792e2e5e55b35092456f80ddeececa58b7fc',
+            bodyRoot: '0x29eba33559030317dff3c76e09852aaae1cbe262cdf577968a04a101dd0820db',
+            selfHash: '0x921eb3e1d8bdb0bbb4b8b95bb03de6846e6f88314018303d09786490c9e5dfc4',
+            isFinality: false,
+            ParentBeaconId: 364,
+        };
 
-    //     const beaconContainerCell = getSSZContainer(
-    //         SSZUintToCell(
-    //             { value: +secondUpdateBeacon.slot, size: 8, isInf: true },
-    //             SSZUintToCell(
-    //                 { value: +secondUpdateBeacon.proposerIndex, size: 8, isInf: false },
-    //                 SSZRootToCell(
-    //                     secondUpdateBeacon.parentRoot,
-    //                     SSZRootToCell(secondUpdateBeacon.stateRoot, SSZRootToCell(secondUpdateBeacon.bodyRoot))
-    //                 )
-    //             )
-    //         )
-    //     );
+        const beaconContainerCell = getSSZContainer(
+            SSZUintToCell(
+                { value: +secondUpdateBeacon.slot, size: 8, isInf: true },
+                SSZUintToCell(
+                    { value: +secondUpdateBeacon.proposerIndex, size: 8, isInf: false },
+                    SSZRootToCell(
+                        secondUpdateBeacon.parentRoot,
+                        SSZRootToCell(secondUpdateBeacon.stateRoot, SSZRootToCell(secondUpdateBeacon.bodyRoot))
+                    )
+                )
+            )
+        );
 
-    //     const beaconFirstContainerCell = getSSZContainer(
-    //         SSZUintToCell(
-    //             { value: +firstUpdateBeacon.slot, size: 8, isInf: true },
-    //             SSZUintToCell(
-    //                 { value: +firstUpdateBeacon.proposerIndex, size: 8, isInf: false },
-    //                 SSZRootToCell(
-    //                     firstUpdateBeacon.parentRoot,
-    //                     SSZRootToCell(firstUpdateBeacon.stateRoot, SSZRootToCell(firstUpdateBeacon.bodyRoot))
-    //                 )
-    //             )
-    //         )
-    //     );
+        const beaconFirstContainerCell = getSSZContainer(
+            SSZUintToCell(
+                { value: +firstUpdateBeacon.slot, size: 8, isInf: true },
+                SSZUintToCell(
+                    { value: +firstUpdateBeacon.proposerIndex, size: 8, isInf: false },
+                    SSZRootToCell(
+                        firstUpdateBeacon.parentRoot,
+                        SSZRootToCell(firstUpdateBeacon.stateRoot, SSZRootToCell(firstUpdateBeacon.bodyRoot))
+                    )
+                )
+            )
+        );
 
-    //     // console.log(beaconContainerCell);
+        // console.log(beaconContainerCell);
 
-    //     const initResult = await lightClient.sendInitOptimisticUpdate(user.getSender(), {
-    //         value: toNano('0.07'),
-    //         beacon: beaconContainerCell,
-    //     });
+        const initResult = await lightClient.sendInitOptimisticUpdate(user.getSender(), {
+            value: toNano('0.07'),
+            beacon: beaconContainerCell,
+        });
 
-    //     const result = await lightClient.sendVerifyOptimisticUpdate(user.getSender(), {
-    //         value: toNano('0.07'),
-    //         beacon: beaconFirstContainerCell,
-    //         nextHash: secondUpdateBeacon.selfHash
-    //     });
-
-
-
-    //     expect(initResult.transactions).toHaveTransaction({
-    //         from: user.address,
-    //         to: lightClient.address,
-    //         success: true,
-    //     });
+        const result = await lightClient.sendVerifyOptimisticUpdate(user.getSender(), {
+            value: toNano('0.07'),
+            beacon: beaconFirstContainerCell,
+            nextHash: secondUpdateBeacon.selfHash
+        });
 
 
-    //     expect(result.transactions).toHaveTransaction({
-    //         from: user.address,
-    //         to: lightClient.address,
-    //         success: true,
-    //     });
-    // });
+
+        expect(initResult.transactions).toHaveTransaction({
+            from: user.address,
+            to: lightClient.address,
+            success: true,
+        });
+
+
+        expect(result.transactions).toHaveTransaction({
+            from: user.address,
+            to: lightClient.address,
+            success: true,
+        });
+    });
 });
 
 const json = {

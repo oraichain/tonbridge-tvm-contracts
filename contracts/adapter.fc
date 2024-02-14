@@ -183,11 +183,6 @@ global int topic_burn_id;
         (cell data_cell, int method) = parse_logs(log_cell);
         (int amount, slice address) = parse_receipt_data(data_cell);
 
-        ;; cell log_body = begin_cell()
-        ;;     .store_slice(address)
-        ;; .end_cell();
-        ;; emit_log_simple(log::wrap, log_body, 0);
-
         if (method) {
             cell mint = begin_cell()
             .store_uint(21, 32)
