@@ -1,0 +1,37 @@
+{
+  "version": "capella",
+  "data": {
+    "attestedHeader": {
+      "beacon": {
+        "slot": 3923618,
+        "proposerIndex": 1455,
+        "parentRoot": "1c5acb0b4f27a4fc65043b82497ead58a652e2728a20a724555bdc03470d90e5",
+        "stateRoot": "7cd3300324e248ca2fb3a01b0134c548249456c9ede63f05eb369adde727eb33",
+        "bodyRoot": "9edda046f1d70c2ae443a21c0694f898882480a8fa487e87ce0d8d250df87ac8"
+      },
+      "execution": {
+        "parentHash": "2ab5420a7084b42aeb1fdaa339ca4480d201db5855bc795137f62780e64d7029",
+        "feeRecipient": "0000000000000000000000000000000000000000",
+        "stateRoot": "3fb4ca78731568a68c5d1ae731a4bd4df86f771b1a19294f89bad2d65c16e142",
+        "receiptsRoot": "3bb002b9e57ec9093b9efebbb8a4c1fade6c10fc79ca37a4bd68fa10512cc9f2",
+        "logsBloom": "b87c0a31fe86585886cf15b3d55c2f4f00f14b59ad260a1e065c1c6ac8481d74611aa000038576412788ab20c345daa6825d69f4d6001eb026b0a91aa6f6251041dca1d0a6a3a08fb25fc0394e60e810284356dc7eb552947f208d0ed0a84e6e2c6c2a09de6366088acad7fc71c0ab1b0e4d0d02a2188c105cea0612a74038bfca11c70707783d225421c950893d4821929005cfe8f99f54881290bb8c780885974025425685afa54e08114ba78fc01199fbf8231ea95d6e230d2f6894e3ea58db9c172bc1001a417fd0ab9ffb01b058ca48a37960fac62f41b97ab504dbf82a3299866c4032747fc208a8388a0578d64cdf88002c40e276c2a1cae14862585f",
+        "prevRandao": "aa84e3edb42ebc88f169f9905d6605f0df1cbae8011440dfd9dccee8cd4bc49e",
+        "blockNumber": 4904267,
+        "gasLimit": 30000000,
+        "gasUsed": 29998417,
+        "timestamp": 1702817016,
+        "extraData": "d883010d04846765746888676f312e32302e34856c696e7578",
+        "baseFeePerGas": "16972611669",
+        "blockHash": "4835515adaff7a7e44f902d379d842d503cf886f2782b4803c5b1db925146b88",
+        "transactionsRoot": "66d8e11eb7b1f334cff1bc5b91ef88ced662db6f087692a0dd025a884d5bda92",
+        "withdrawalsRoot": "ba2230b116aa603aeed031e6da54eef6cf349dd6de805e4d83484718d497c250"
+      },
+      "executionBranch": [
+        "d7a68d5b0153ad45ab781632e2ee4e823f7e06eb0344e33670edb72cfd2fd803",
+        "336488033fe5f3ef4ccc12af07b9370b92e553e35ecb4a337a1b1c0e4afe1e0e",
+        "db56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+        "5ab84ab90f10e8a08728cef4c528b50b62fead2aa0012f53267911b920fec1e8"
+      ]
+    }
+  }
+}

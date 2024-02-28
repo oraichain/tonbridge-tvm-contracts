@@ -1,0 +1,518 @@
+#include "../utils/messages.fc";
+#include "../static/op-codes.fc";
+builder store_endian4(builder b, int x) asm(x b) "STULE4";
+builder store_endian8(builder b, int x) asm(x b) "STULE8";
+
+
+const op::run_ssz = "op::run_ssz"c; ;; create an opcode from string using the "c" prefix, this results in 0x86f1bcc5 opcode in this case
+const op::run_verify_receipt = "op::run_verify_receipt"c;
+
+const type::uint = "type::uint"c;
+const type::bool = "type::bool"c;
+const type::byteVector = "type::byteVector"c;
+const type::bitVector = "type::bitVector"c;
+const type::bitList = "type::bitList"c;
+const type::byteList = "type::byteList"c;
+const type::list = "type::list"c;
+const type::vector = "type::vector"c;
+const type::container = "type::container"c;
+const type::empty = "type::empty"c;
+
+int sha256(slice a, slice b) asm "2 PUSHINT HASHEXT_SHA256";
+
+(int) tlen(tuple data) asm "TLEN";
+
+(slice) writeUIntLE(int value, int size) impure {
+  builder data_cell = begin_cell();
+
+  int diff = 32 - size;
+
+  repeat(size) {
+    data_cell = data_cell.store_uint(value, 8);
+    value = value >> 8;
+  }
+
+  data_cell = data_cell.store_uint(0, diff * 8);
+
+  return data_cell.end_cell().begin_parse();
+}
+
+(int) sha_hash_2(slice a, slice b) impure {
+  return sha256(a, b);
+}
+
+;; Optimized variant
+(int) pow (int n, int e) {
+    if (e == 0) {
+        return 1;
+    }
+    if (e == 1) {
+        return n;
+    }
+    int p = pow(n, e / 2);
+    p *= p;
+    if ((e % 2) == 1) {
+        p *= n;
+    }
+    return p;
+}
+
+int bitLength(int n) impure {
+  int length = 0;
+
+  while (n != 0) {
+    n = n / 2;
+    length += 1;
+  }
+
+  return length;
+}
+
+(int) nextPowerOf2(int n) impure {
+  return n <= 0 ? 1 : pow(2, bitLength(n - 1));
+}
+
+
+(int) mix_in_length(int root, int length) impure {
+  slice lengthBuf = writeUIntLE(length, 6);
+  return sha_hash_2(begin_cell().store_uint(root, 32 * 8).end_cell().begin_parse(), lengthBuf);
+}
+
+(int) zeroHash(int depth) impure {
+  if (depth == 0) {
+    return 0;
+    ;; return begin_cell().store_uint(0, 32 * 8).end_cell().begin_parse();
+  }
+  slice a = begin_cell().store_uint(zeroHash(depth - 1), 32 * 8).end_cell().begin_parse();
+  return sha_hash_2(a, a);
+}
+
+(int) merkleize(tuple chunks, int padFor, int count) impure {
+  int layerCount = bitLength(nextPowerOf2(padFor) - 1);
+
+  if (count == 0) {
+    return zeroHash(layerCount);
+  }
+
+  int chunkCount = count;
+
+  ;; Instead of pushing on all padding zero chunks at the leaf level
+  ;; we push on zero hash chunks at the highest possible level to avoid over-hashing
+  int l = 0;
+  repeat(layerCount) {
+    int padCount = chunkCount % 2;
+    int paddedChunkCount = chunkCount + padCount;
+
+    ;; if the chunks.length is odd
+    ;; we need to push on the zero-hash of that level to merkleize that level
+    repeat(padCount) {
+      chunks = cons(zeroHash(l), chunks);
+    }
+
+    tuple newChunks = empty_tuple();
+
+    repeat (paddedChunkCount / 2) {
+      int a = chunks~list_next();
+      int b = chunks~list_next();
+      newChunks = newChunks.tpush(sha_hash_2(
+        begin_cell().store_uint(b,32 * 8).end_cell().begin_parse(),
+        begin_cell().store_uint(a,32 * 8).end_cell().begin_parse()
+        ));
+
+    }
+
+    tuple fixedChunks = empty_tuple();
+    while (newChunks.tlen() > 0) {
+      int hash = newChunks~tpop();
+      fixedChunks = cons(hash, fixedChunks);
+    }
+    chunks = fixedChunks;
+
+    chunkCount = paddedChunkCount / 2;
+    l += 1;
+  }
+
+  int res = chunks~list_next();
+  return res;
+}
+
+(int) merkelize_dict(cell chunks, int padFor, int count, int start_key) impure {
+  int layerCount = bitLength(nextPowerOf2(padFor) - 1);
+
+  if (count == 0) {
+    return zeroHash(layerCount);
+  }
+
+  int chunkCount = count;
+  int l = 0;
+  repeat(layerCount) {
+    int padCount = chunkCount % 2;
+    int paddedChunkCount = chunkCount + padCount;
+
+    ;; if the chunks.length is odd
+    ;; we need to push on the zero-hash of that level to merkleize that level
+    int i = 0;
+    repeat(padCount) {
+      slice zero_hash = begin_cell()
+      .store_uint(zeroHash(l), 32 * 8)
+      .end_cell().begin_parse();
+
+      chunks~udict_set(32, chunkCount + i + start_key, zero_hash);
+      i = i + 1;
+    }
+
+    ;; (int key, slice val, int flag) = chunks.udict_get_min?(32);
+    int key = 0;
+    int flag = -1;
+    repeat (paddedChunkCount / 2) {
+      ;; int current_key = key;
+      ;; (key, slice a,  flag) = chunks.udict_get_next?(32, key);
+      ;; (key, slice b,  flag) = chunks.udict_get_next?(32, key);
+
+      (slice a, flag) = chunks.udict_get?(32, key * 2 + start_key);
+      (slice b, flag) = chunks.udict_get?(32, (key * 2) + 1 + start_key);
+
+      int sha_hash = sha_hash_2(a, b);
+
+      chunks~udict_set(32, key + start_key, begin_cell()
+      .store_uint(sha_hash, 32 * 8)
+      .end_cell().begin_parse());
+
+      key = key + 1;
+    }
+
+    chunkCount = paddedChunkCount / 2;
+    l += 1;
+  }
+
+  (slice res, int key) = chunks.udict_get?(32, 0 + start_key);
+  return res~load_uint(32 * 8);
+}
+
+
+;; /**
+;;  * Split a long Uint8Array into Uint8Array of exactly 32 bytes
+;;  */
+(tuple) splitIntoRootChunks(tuple longChunk) impure {
+  ;;   const chunkCount = Math.ceil(longChunk.length / 32);
+  int chunkCount = longChunk.tlen() / 32;
+  tuple chunks = empty_tuple();
+
+  repeat(chunkCount) {
+    ;;     const chunk = new Uint8Array(32);
+    ;;     chunk.set(longChunk.slice(i * 32, (i + 1) * 32));
+    ;;     chunks[i] = chunk;
+
+    ;; chunks.tpush();
+  }
+
+  return chunks;
+}
+
+;; () hashTreeRoot(value) impure {
+;;   const root = merkleize(this.getRoots(value), this.maxChunkCount);
+
+;;   return root;
+;; }
+
+
+(tuple) reverse_list(tuple list) impure {
+  tuple old_list = list;
+  tuple new_list = empty_tuple();
+
+  while (old_list.tlen() > 0) {
+    new_list = cons(old_list~list_next(), new_list);
+  }
+
+  return new_list;
+}
+
+(tuple) fill_tuple(tuple fill, cell data, int count) impure {
+  slice cs = data.begin_parse();
+  int value = cs~load_uint(32 * 8);
+  count += 1;
+  fill = cons(value, fill);
+  ;; fill = fill.tpush(value);
+  if (cs.slice_refs_empty?() == 0) {
+    return fill_tuple(fill, cs~load_ref(), count);
+  }
+  return cons(count, fill);
+}
+
+(slice, slice) hashTreeRoot(slice cs) impure {
+  ;; slice cs = value.begin_parse();
+  int data_type = cs~load_uint(32);
+
+  if (data_type == type::bool) {
+    int data = cs~load_uint(1);
+    return (cs, begin_cell()
+    .store_uint(data, 8)
+    .store_uint(0, 31 * 8)
+    .end_cell()
+    .begin_parse());
+  }
+
+  if (data_type == type::uint) {
+    int isInf = cs~load_uint(1);
+    int size = cs~load_uint(16);
+    int data = cs~load_uint(size * 8);
+
+    if (size == 1) {
+      return (cs, begin_cell()
+      .store_uint(data, size * 8)
+      .store_uint(0, 31 * 8)
+      .end_cell().begin_parse());
+    }
+    if (size == 2) {
+      return (cs, begin_cell()
+      .store_uint(data & 0xFF, 8)
+      .store_uint(data / 0x100, 8)
+      .store_uint(0, 30 * 8)
+      .end_cell().begin_parse());
+    }
+    if (size == 4) {
+      return (cs, begin_cell()
+      .store_endian4(data)
+      .store_uint(0, 28 * 8)
+      .end_cell().begin_parse());
+    }
+    if (size == 8) {
+      ;; if (isInf) {
+      ;;   data = 0xffffffffffffffff;
+      ;; }
+
+      return (cs, begin_cell()
+      .store_endian8(data)
+      .store_uint(0, 24 * 8)
+      .end_cell().begin_parse());
+    }
+  }
+  if ((data_type == type::byteList)) {
+    cell start = cs~load_ref();
+    int padFor = cs~load_uint(32);
+    int valueLength = cs~load_uint(64);
+    int count = 0;
+    tuple filled = fill_tuple(empty_tuple(), start, count);
+    count = filled~list_next();
+
+    int res = merkleize(filled, padFor, count);
+    res = mix_in_length(res, valueLength);
+
+    return (
+      cs,
+      begin_cell()
+        .store_uint(res, 32 * 8)
+      .end_cell()
+      .begin_parse()
+    );
+  }
+
+  if ((data_type == type::byteVector)) {
+    cell start = cs~load_ref();
+    int padFor = cs~load_uint(32);
+    int valueLength = cs~load_uint(64);
+    int count = 0;
+    tuple filled = fill_tuple(empty_tuple(), start, count);
+    count = filled~list_next();
+
+    int res = merkleize(filled, padFor, count);
+    ;; res = mix_in_length(res, valueLength);
+
+    return (
+      cs,
+      begin_cell()
+        .store_uint(res, 32 * 8)
+      .end_cell()
+      .begin_parse()
+    );
+  }
+
+  if (data_type == type::container) {
+    cell fields = cs~load_ref();
+    tuple chunks = empty_tuple();
+
+    int count = 0;
+    slice fields_slice = fields.begin_parse();
+
+    slice field_res = fields_slice~hashTreeRoot();
+    int field_hash = field_res~load_uint(32 * 8);
+    chunks = cons(field_hash, chunks);
+    count += 1;
+
+    while (fields_slice.slice_refs_empty?() == 0) {
+      fields = fields_slice~load_ref();
+      fields_slice = fields.begin_parse();
+
+      slice field_res = fields_slice~hashTreeRoot();
+      int field_hash = field_res~load_uint(32 * 8);
+
+      chunks = cons(field_hash, chunks);
+      count += 1;
+    }
+
+    int res = merkleize(chunks, count, count);
+
+    return (cs, begin_cell()
+    .store_uint(res, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
+  if (data_type == type::list) {
+    cell fields = cs~load_ref();
+    tuple chunks = empty_tuple();
+    int valueLength = cs~load_uint(64);
+    int isEmpty = cs~load_uint(1);
+
+    int count = 0;
+    if (isEmpty == 0) {
+      slice fields_slice = fields.begin_parse();
+
+      slice field_res = fields_slice~hashTreeRoot();
+      int field_hash = field_res~load_uint(32 * 8);
+      chunks = cons(field_hash, chunks);
+      count += 1;
+
+      while (fields_slice.slice_refs_empty?() == 0) {
+        fields = fields_slice~load_ref();
+        fields_slice = fields.begin_parse();
+
+        slice field_res = fields_slice~hashTreeRoot();
+        int field_hash = field_res~load_uint(32 * 8);
+
+        chunks = cons(field_hash, chunks);
+        count += 1;
+      }
+    }
+
+    int res = merkleize(chunks, valueLength, count);
+    res = mix_in_length(res, count);
+
+    return (cs, begin_cell()
+    .store_uint(res, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
+  if (data_type == type::vector) {
+    cell fields = cs~load_ref();
+    tuple chunks = empty_tuple();
+    int valueLength = cs~load_uint(64);
+    int isEmpty = cs~load_uint(1);
+
+    int count = 0;
+    if (isEmpty == 0) {
+      slice fields_slice = fields.begin_parse();
+
+      slice field_res = fields_slice~hashTreeRoot();
+      int field_hash = field_res~load_uint(32 * 8);
+      chunks = cons(field_hash, chunks);
+      count += 1;
+
+      while (fields_slice.slice_refs_empty?() == 0) {
+        fields = fields_slice~load_ref();
+        fields_slice = fields.begin_parse();
+
+        slice field_res = fields_slice~hashTreeRoot();
+        int field_hash = field_res~load_uint(32 * 8);
+
+        chunks = cons(field_hash, chunks);
+        count += 1;
+      }
+    }
+
+
+
+    int res = merkleize(reverse_list(chunks), valueLength, count);
+    ;; res = mix_in_length(res, count);
+
+    return (cs, begin_cell()
+    .store_uint(res, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
+  if (data_type == type::bitList) {
+    int bitLimit = cs~load_uint(128);
+    int bitLen = cs~load_uint(256);
+    cell start = cs~load_ref();
+
+    int count = 0;
+    tuple filled = fill_tuple(empty_tuple(), start, count);
+    count = filled~list_next();
+
+    int valueLength = (bitLimit / 8) / 32;
+    int res = merkleize(filled, valueLength, count);
+    res = mix_in_length(res, bitLen);
+
+    return (cs, begin_cell()
+    .store_uint(res, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
+  if (data_type == type::bitVector) {
+    int bitLimit = cs~load_uint(128);
+    ;; int bitLen = cs~load_uint(256);
+    cell start = cs~load_ref();
+
+    int count = 0;
+    tuple filled = fill_tuple(empty_tuple(), start, count);
+    count = filled~list_next();
+
+    int valueLength = (bitLimit / 8) / 32;
+    int res = merkleize(filled, valueLength, count);
+    ;; res = mix_in_length(res, bitLen);
+
+    return (cs, begin_cell()
+    .store_uint(res, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
+  if (data_type == type::empty) {
+    return (cs, begin_cell()
+    .store_uint(0, 32 * 8)
+    .end_cell().begin_parse());
+  }
+
+  throw(1111);
+  return (cs, begin_cell().end_cell().begin_parse());
+}
+
+(int) is_valid_merkle_branch (int leaf, tuple branch, int depth, int index, int root) impure {
+  int value = leaf;
+  int powRes = 1;
+
+  repeat(depth) {
+    slice value_slice = begin_cell().store_uint(value, 32 * 8).end_cell().begin_parse();
+    if ((index / powRes) % 2 == 1) {
+      value = sha_hash_2(branch~tpop(),value_slice);
+    } else {
+      value = sha_hash_2(value_slice, branch~tpop());
+    }
+    powRes = powRes * 2;
+  }
+
+  return (value == root) % 2;
+}
+
+(tuple) committee_branch_to_tuple(slice branch) impure {
+  tuple t = empty_tuple();
+  slice items = branch;
+
+  t = t.tpush(items);
+  while(items.slice_refs_empty?() == 0) {
+    items = items~load_ref().begin_parse();
+    t = t.tpush(items);
+  }
+  return t;
+}
+
+(tuple) branch_to_tuple(slice branch) impure {
+  tuple t = empty_tuple();
+  slice items = branch~load_ref().begin_parse();
+
+  while(items.slice_refs_empty?() == 0) {
+    t = t.tpush(items~load_ref().begin_parse());
+    if(items.slice_refs_empty?() == 0) {
+      items = items~load_ref().begin_parse();
+    }
+  }
+  return t;
+}

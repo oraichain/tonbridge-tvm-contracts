@@ -1,0 +1,37 @@
+{
+  "version": "capella",
+  "data": {
+    "attestedHeader": {
+      "beacon": {
+        "slot": 3915081,
+        "proposerIndex": 954,
+        "parentRoot": "1a91ee15cb709bfd5f6f91b0deb6ba8a82a1871da2e8d06d38033467ed9de4b5",
+        "stateRoot": "9d0ea8b7d22ef7f6be6b14519fc51fc88f96d00743caf127e333c40c8e8b4e9e",
+        "bodyRoot": "ca4d641b16c400d802ea4e600c13d523fb2644aba8344940d17001f1f707dac9"
+      },
+      "execution": {
+        "parentHash": "9e56eb2313ba9ea8349b85bc266cb5f187edfd9d5d914e3a2833f18a8b98db39",
+        "feeRecipient": "388ea662ef2c223ec0b047d41bf3c0f362142ad5",
+        "stateRoot": "54e52284fa4bae98587e513c15e72aa842cbe05478306290a3b911e3088738b9",
+        "receiptsRoot": "59dd802bd961fbf59f46bcef1bb9b9cd3d8fc6973975406ad58dbe01da1a0c63",
+        "logsBloom": "8049c0b8c93a1cf0ae4b973734b000e19031538c0ca406150f54c474daad26e35caab677a201231d4a11cca211bef09423656c0ecf035f05bef311345aee3d86f4cb80db0039cb85c51f4c69783c8c589497e1b52dcc4a537c2322eed0e397e328b018f81a32d4481a81e154958cef6f14c385e75718ac181e28a51aae6805338f3825122030d24767201b6b0d31ce03fd2816cdb839b14c18893a63a696c8b5b74984277724b77b8c00181068d0f001397fbe4fbf29040be0b2f7d40c4b468a81c6158282091bd2ab17fd53d30147241941e1059d185025f6e1344b4595f82a26d4061c199bbf78a834a95c9394a3c72640b05a9c208889b6095b60ba16607d",
+        "prevRandao": "2287bcbfc372981001d753263e0dbbe056991e296db6eca8d4ae34373fbd9045",
+        "blockNumber": 4896560,
+        "gasLimit": 30000000,
+        "gasUsed": 29876779,
+        "timestamp": 1702714572,
+        "extraData": "d883010d04846765746888676f312e32312e33856c696e7578",
+        "baseFeePerGas": "26840939971",
+        "blockHash": "e5a2dc75d6d0db67b5b1bd64547bd37354a986ffa5ec0bbd6253651e355e9a34",
+        "transactionsRoot": "94a4c36734febcf5bc6bafb2984fcacddb460e7f1a55f5f0ccb96da68d162c1b",
+        "withdrawalsRoot": "c45f9cf31280618eeb5e773e81d46a3a6f20235b3606924893f1801ba0e557f9"
+      },
+      "executionBranch": [
+        "121587e7b21f159559eb3db46622ab8a290f6b76bc11af91c76e0fd352d0a42f",
+        "336488033fe5f3ef4ccc12af07b9370b92e553e35ecb4a337a1b1c0e4afe1e0e",
+        "db56114e00fdd4c1f85c892bf35ac9a89289aaecb1ebd0a96cde606a748b5d71",
+        "fce002cc39a8c9a80da95c992e7869c37e91c2be35328f0b2b98622036b988e0"
+      ]
+    }
+  }
+}

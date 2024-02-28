@@ -1,0 +1,585 @@
+#include "imports/stdlib.fc";
+#include "utils/messages.fc";
+#include "static/errors.fc";
+#include "static/op-codes.fc";
+#include "utils/ssz_utils.fc";
+#include "utils/rlp_verify.fc";
+#include "utils/client_storage.fc";
+#include "utils/beacon_reader.fc";
+
+(slice) bls_aggregate(slice, slice) asm "BLS_G1_ADD";
+(int) bls_verify(slice pub, slice msg, slice sig) asm "BLS_VERIFY";
+
+;; storage variables
+int gas_consumption() asm "15000000 PUSHINT"; ;; 0.015 TON
+;; const domain = 0x0700000047eb72b3be36f08feffcaba760f0a2ed78c1a85f0654941a0d19d0fa;
+const domain = 0x07000000d31f6191ca65c836e170318c55fcf34b7e308f8fbca8e663bf565808;
+
+(int) get_beacon_bls_msg(cell beacon) impure {
+    slice beacon_ssz = beacon.begin_parse();
+    (slice a, slice ssz_beacon_hash) = beacon_ssz.hashTreeRoot();
+
+    ;; tuple chunks = empty_tuple();
+    ;; chunks = cons(ssz_beacon_hash~load_uint(32 * 8), chunks);
+    ;; chunks = cons(domain, chunks);
+
+    ;; int signature_hash = merkleize(chunks, 2, 2);
+
+    ;; return begin_cell().store_uint(signature_hash, 32 * 8).end_cell().begin_parse();
+    ;; return signature_hash;
+    return ssz_beacon_hash~load_uint(32 * 8);
+}
+
+(slice) get_aggregated_pubkey(slice aggr_pubkey,  slice aggregate_slice, int start, int end) impure {
+
+    ;;  (int key, slice val, int flag) = pubkeys_dict.udict_get_min?(32);
+    int key = start;
+    (slice val, int flag) = pubkeys_dict.udict_get?(32, start);
+    aggregate_slice~skip_bits(start);
+
+    while (flag ? key < end : 0 ) {
+        if (aggregate_slice~load_uint(1)) {
+            if (aggr_pubkey.slice_empty?()) {
+                aggr_pubkey = val;
+            } else {
+                aggr_pubkey = bls_aggregate(aggr_pubkey, val);
+            }
+        }
+
+        (key, val, flag) = pubkeys_dict.udict_get_next?(32, key);
+    }
+
+    return aggr_pubkey;
+}
+
+(int) aggregatePubkeyHashTreeRoot(slice cs) impure {
+    int padFor = 2;
+    int count = 2;
+    tuple filled = empty_tuple();
+    int part1 = cs~load_uint(32 * 8);
+    int part2 = cs~load_uint(16 * 8) << (16 * 8);
+    filled = cons(part1, filled);
+    filled = cons(part2, filled);
+
+    int res = merkleize(filled, padFor, count);
+    return res;
+}
+
+(int) next_sync_committee_pubkeys_hash_tree_root(slice cs, int start) impure {
+    cell pubkeys = cs~load_dict();
+
+    int key = start;
+    int step = 32;
+    repeat(step) {
+        (slice val, int flag) = pubkeys.udict_get?(32, key);
+        int hash = aggregatePubkeyHashTreeRoot(val);
+        slice hash_slice = begin_cell().store_uint(hash, 32 * 8).end_cell().begin_parse();
+        pubkeys~udict_set(32, key, hash_slice);
+        key = key + 1;
+    }
+
+    ;; (slice item, int k) = pubkeys.udict_get?(32, 511);
+
+    ;; 32 * 8
+    ;; optimal size = 32 ?? 64
+    ;; int part1 = merkelize_dict(pubkeys, 256, 256, 0);
+    ;; int part2 = merkelize_dict(pubkeys, 256, 256, 256);
+
+    ;; tuple filled = empty_tuple();
+    ;; filled = cons(part1, filled);
+    ;; filled = cons(part2, filled);
+
+    ;; int res = merkleize(filled, 2, 2);
+    int res =  merkelize_dict(pubkeys,step,step,start);
+    return res;
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) { ;; ignore all bounced messages
+        return ();
+    }
+
+    slice sender_addr = cs~load_msg_addr();
+    load_data(); ;; here we populate the storage variables
+
+    int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
+    int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+
+    if (op == op::init_committee) {
+        init_committee(in_msg_body);
+        return ();
+    }
+
+    if (op == op::add_optimistic_update) {
+        add_some_update(in_msg_body);
+        return ();
+    }
+
+    if (op == op::add_execution) {
+        cell execution = in_msg_body~load_ref();
+        cell execution_branch = in_msg_body~load_ref();
+        slice execution_slice = execution.begin_parse();
+
+        cell key_cell = in_msg_body~load_ref();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+
+        (slice tmp, slice execution_ssz_hash) = execution_slice.hashTreeRoot();
+        slice beacon_structure_slice = get_beacon_structure(key_beacon_signature);
+        int is_beacon_verified = beacon_structure_slice~load_uint(1);
+        cell beacon_cell = beacon_structure_slice~load_ref();
+        slice beacon_body_root_data = get_beacon_body_root(beacon_cell);
+
+        tuple branch = committee_branch_to_tuple(execution_branch.begin_parse());
+        int res = verify_execution(execution_ssz_hash, branch, beacon_body_root_data);
+        int res = 1;
+        if (res) {
+            cell beacon_struct = begin_cell()
+                .store_uint(is_beacon_verified, 1)
+                .store_ref(beacon_cell)
+                .store_ref(execution)
+            .end_cell();
+            beacons_dict~udict_set(32 * 8, key_beacon_signature, beacon_struct.begin_parse());
+
+            save_data();
+            return();
+        } else {
+            throw(0xffff);
+        }
+    }
+
+    if (op == op::add_next_sync_committee) {
+        cell data = in_msg_body~load_ref();
+        slice data_slice = data.begin_parse();
+        cell committee_cell = data_slice~load_ref();
+        slice committee_slice = committee_cell.begin_parse();
+
+        cell key_cell = in_msg_body~load_ref();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+        slice beacon_structure_slice = get_beacon_structure(key_beacon_signature);
+
+        cell beacon_cell = beacon_structure_slice~load_ref();
+        cell execution = beacon_structure_slice~load_ref();
+
+        cell beacon_struct = begin_cell()
+            .store_uint(0, 1)
+            .store_ref(beacon_cell)
+            .store_ref(execution)
+            .store_ref(committee_cell)
+        .end_cell();
+        beacons_dict~udict_set(32 * 8, key_beacon_signature, beacon_struct.begin_parse());
+
+        save_data();
+        return ();
+        ;; }
+
+        ;; throw(0xffff);
+    }
+
+    if (op == op::calc_committee_hash) {
+        cell key_cell = in_msg_body~load_ref();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+        slice beacon_structure_slice = get_beacon_structure(key_beacon_signature);
+        (slice beacon_meta_structure_slice, int flag_meta) = beacons_meta_dict.udict_get?(32 * 8, key_beacon_signature);
+
+        cell committee_hash_data_cell = beacon_meta_structure_slice~load_ref();
+        slice committee_hash_data_slice = committee_hash_data_cell.begin_parse();
+        int initial_committee_index = committee_hash_data_slice~load_uint(16);
+        cell aggregate_hash_data_cell = beacon_meta_structure_slice~load_ref();
+
+        cell committee_hash_dict_cell = committee_hash_data_slice~load_ref();
+        slice committee_hash_dict_slice = committee_hash_dict_cell.begin_parse();
+
+        cell beacon_cell = beacon_structure_slice~load_ref();
+        cell execution = beacon_structure_slice~load_ref();
+        cell committee_cell = beacon_structure_slice~load_ref();
+
+        if ((initial_committee_index) * 32 < 512) {
+            int committee_pubkeys_hash = next_sync_committee_pubkeys_hash_tree_root(committee_cell.begin_parse(), initial_committee_index * 32);
+            cell beacon_meta_struct = begin_cell()
+            .store_ref(
+                begin_cell()
+                    .store_uint(initial_committee_index + 1, 16)
+                    .store_ref(
+                    begin_cell()
+                            .store_uint(committee_pubkeys_hash, 32 * 8)
+                            .store_ref(committee_hash_dict_cell)
+                        .end_cell()
+                )
+                .end_cell()
+            )
+            .store_ref(aggregate_hash_data_cell)
+            .end_cell();
+            beacons_meta_dict~udict_set(32 * 8, key_beacon_signature, beacon_meta_struct.begin_parse());
+            save_data();
+
+
+            return ();
+        }
+
+        throw(1000);
+    }
+
+    if (op == op::verify_committee) {
+        cell data = in_msg_body~load_ref();
+        slice data_slice = data.begin_parse();
+        cell committee_branch_cell = in_msg_body~load_ref();
+        tuple committee_branch_tuple = committee_branch_to_tuple(committee_branch_cell.begin_parse());
+
+
+        cell key_cell = in_msg_body~load_ref();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+        slice beacon_structure_slice = get_beacon_structure(key_beacon_signature);
+        (slice beacon_meta_structure_slice, int flag_meta) = beacons_meta_dict.udict_get?(32 * 8, key_beacon_signature);
+
+        cell committee_hash_data_cell = beacon_meta_structure_slice~load_ref();
+        slice committee_hash_data_slice = committee_hash_data_cell.begin_parse();
+        int initial_committee_index = committee_hash_data_slice~load_uint(16);
+        cell aggregate_hash_data_cell = beacon_meta_structure_slice~load_ref();
+
+        if (initial_committee_index == 16) {
+            cell committee_hash_dict_cell = committee_hash_data_slice~load_ref();
+            slice committee_hash_dict_slice = committee_hash_dict_cell.begin_parse();
+
+            cell beacon_cell = beacon_structure_slice~load_ref();
+            cell execution = beacon_structure_slice~load_ref();
+            cell committee_cell = beacon_structure_slice~load_ref();
+
+            ;; cell committee_branch_cell = committee_cell;
+            slice committee_branch_slice = committee_branch_cell.begin_parse();
+            tuple committee_branch_tuple = committee_branch_to_tuple(committee_branch_slice);
+            int committee_aggregate_hash = aggregatePubkeyHashTreeRoot(data_slice);
+            int execution_branch_length = 5;
+            int index = 23;
+
+            slice beacon_slice = beacon_cell.begin_parse();
+            slice beacon_slot = beacon_slice~load_ref().begin_parse();
+            slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
+            slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
+            slice beacon_parent_root_data = beacon_parent_root~load_ref().begin_parse();
+
+            slice beacon_state_root = beacon_parent_root~load_ref().begin_parse();
+            slice beacon_state_root_data = beacon_state_root~load_ref().begin_parse();
+            slice beacon_body_root = beacon_state_root~load_ref().begin_parse();
+            slice beacon_body_root_data = beacon_body_root~load_ref().begin_parse();
+
+            int committee_pubkeys_hash = 0;
+            tuple chunks = empty_tuple();
+            repeat(initial_committee_index) {
+                int part_hash = committee_hash_dict_slice~load_uint(32 * 8);
+                chunks = cons(part_hash, chunks);
+                cell committee_hash_part_cell = committee_hash_dict_slice~load_ref();
+                committee_hash_dict_slice = committee_hash_part_cell.begin_parse();
+            }
+            int committee_pubkeys_hash = merkleize(reverse_list(chunks), 16, 16);
+
+            chunks = empty_tuple();
+            chunks = cons(committee_pubkeys_hash, chunks);
+            chunks = cons(committee_aggregate_hash, chunks);
+            int committee_hash = merkleize(chunks, 2, 2);
+
+            int res = is_valid_merkle_branch(
+                committee_hash,
+                committee_branch_tuple,
+                execution_branch_length,
+                index,
+                beacon_state_root_data~load_uint(32 * 8)
+            );
+
+            if (res) {
+                cell beacon_meta_struct = begin_cell()
+                .store_ref(
+                    begin_cell()
+                        .store_uint(initial_committee_index + 1, 16)
+                    .end_cell()
+                )
+                .store_ref(aggregate_hash_data_cell)
+                .end_cell();
+                beacons_meta_dict~udict_set(32 * 8, key_beacon_signature, beacon_meta_struct.begin_parse());
+                save_data();
+                return ();
+            }
+
+        }
+        throw(1000);
+    }
+
+    if (op == op::aggregate_pubkey) {
+        cell aggregate_cell = in_msg_body~load_ref();
+        slice aggregate_slice = aggregate_cell.begin_parse();
+
+        cell key_cell = in_msg_body~load_ref();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+        slice beacon_structure_slice = get_beacon_structure(key_beacon_signature);
+        (slice beacon_meta_structure_slice, int flag_meta) = beacons_meta_dict.udict_get?(32 * 8, key_beacon_signature);
+
+        cell committee_hash_data_cell = beacon_meta_structure_slice~load_ref();
+        cell aggregate_hash_data_cell = beacon_meta_structure_slice~load_ref();
+        slice aggregate_hash_data_slice = aggregate_hash_data_cell.begin_parse();
+
+        int initial_aggregate_index = aggregate_hash_data_slice~load_uint(16);
+
+        cell aggregate_hash_dict_cell = aggregate_hash_data_slice~load_ref();
+        slice aggregate_hash_dict_slice = aggregate_hash_dict_cell.begin_parse();
+
+        cell beacon_cell = beacon_structure_slice~load_ref();
+        cell execution = beacon_structure_slice~load_ref();
+        cell committee_cell = beacon_structure_slice~load_ref();
+
+        if ((initial_aggregate_index) < 4) {
+            int next_aggregate_index = initial_aggregate_index + 1;
+            aggregate_hash_dict_slice = get_aggregated_pubkey(aggregate_hash_dict_slice, aggregate_slice, initial_aggregate_index * 128, next_aggregate_index * 128);
+
+            cell beacon_meta_struct = begin_cell()
+            .store_ref(
+                committee_hash_data_cell
+            )
+            .store_ref(
+                begin_cell()
+                .store_uint(next_aggregate_index, 16)
+                .store_ref(
+                    begin_cell()
+                        .store_slice(aggregate_hash_dict_slice)
+                    .end_cell()
+                )
+                .end_cell()
+            )
+            .end_cell();
+            beacons_meta_dict~udict_set(32 * 8, key_beacon_signature, beacon_meta_struct.begin_parse());
+            save_data();
+
+
+            return ();
+        }
+    }
+
+    if (op == op::add_finally_update) {
+        cell aggregate_cell = in_msg_body~load_ref();
+        slice aggregate_slice = aggregate_cell.begin_parse();
+
+        cell key_cell = in_msg_body~load_ref();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+        slice beacon_structure_slice = get_beacon_structure(key_beacon_signature);
+        (slice beacon_meta_structure_slice, int flag_meta) = beacons_meta_dict.udict_get?(32 * 8, key_beacon_signature);
+
+        cell committee_hash_data_cell = beacon_meta_structure_slice~load_ref();
+        cell aggregate_hash_data_cell = beacon_meta_structure_slice~load_ref();
+        slice aggregate_hash_data_slice = aggregate_hash_data_cell.begin_parse();
+
+        int initial_aggregate_index = aggregate_hash_data_slice~load_uint(16);
+
+        cell aggregate_hash_dict_cell = aggregate_hash_data_slice~load_ref();
+        slice aggregate_hash_dict_slice = aggregate_hash_dict_cell.begin_parse();
+
+        slice aggr_pubkey = aggregate_hash_dict_slice;
+        slice sig = (aggregate_slice~load_ref()).begin_parse();
+
+
+        ;; slice aggregate_slice = begin_cell().store_uint(get_beacon_bls_msg(beacon_structure_slice~load_ref()), 32 * 8).end_cell().begin_parse();
+
+
+        ;; int is_signed = verify_beacon(aggr_pubkey, aggregate_slice, sig);
+        cell beacon_cell = beacon_structure_slice~load_ref();
+        int ssz_beacon_hash = get_beacon_bls_msg(beacon_cell);
+        tuple chunks = empty_tuple();
+        chunks = cons(ssz_beacon_hash, chunks);
+        chunks = cons(domain, chunks);
+
+
+        int msg_num = merkleize(chunks, 2, 2);
+        slice msg = begin_cell().store_uint(msg_num, 32 * 8).end_cell().begin_parse();
+        int is_signed = bls_verify(aggr_pubkey, msg , sig);
+
+        if (is_signed) {
+            cell execution = beacon_structure_slice~load_ref();
+            last_finality_hash = key_beacon_signature;
+            if (beacon_structure_slice.slice_refs_empty?() == 0) {
+                ;; TODO: add check for committee
+                pubkeys_dict = beacon_structure_slice~load_ref();
+            }
+
+            cell beacon_struct = begin_cell()
+                .store_uint(1, 1)
+                .store_ref(beacon_cell)
+                .store_ref(execution)
+                .store_ref(pubkeys_dict)
+            .end_cell();
+            beacons_dict~udict_set(32 * 8, key_beacon_signature, beacon_struct.begin_parse());
+
+            save_data();
+            return();
+        }
+
+        throw(1000);
+    }
+
+    if (op == op::verify_receipt) {
+        cell receipt = in_msg_body~load_ref();
+        cell adapter_addr_cell = in_msg_body~load_ref();
+        slice adapter_addr_slice = adapter_addr_cell.begin_parse();
+        cell key_cell = adapter_addr_slice~load_ref();
+
+        slice adapter_addr = adapter_addr_slice~load_msg_addr();
+        ;; cell root_hash = begin_cell().store_uint(receipt_root, 32 * 8).end_cell();
+        slice key_slice = key_cell.begin_parse();
+        int key_beacon_signature = key_slice~load_uint(32 * 8);
+        (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, key_beacon_signature);
+        ;; beacon_structure_slice = (beacon_structure_slice~load_ref()).begin_parse();
+
+        if (beacon_structure_slice.slice_data_empty?()) {
+            throw(0x1111);
+        }
+        if (beacon_structure_slice~load_uint(1) == 0) {
+            throw(0x1111);
+        }
+        beacon_structure_slice~load_ref();
+        slice execution_slice = (beacon_structure_slice~load_ref()).begin_parse();
+
+        slice parent_hash_slice = (execution_slice~load_ref()).begin_parse();
+        parent_hash_slice~load_ref();
+        slice fee_recipient_slice = (parent_hash_slice~load_ref()).begin_parse();
+        fee_recipient_slice~load_ref();
+        slice state_root_slice = (fee_recipient_slice~load_ref()).begin_parse();
+        state_root_slice~load_ref();
+        slice receipts_root_slice = (state_root_slice~load_ref()).begin_parse();
+        slice receipts_root_data = (receipts_root_slice~load_ref()).begin_parse();
+
+        int receipt_root = receipts_root_data~load_uint(32 * 8);
+        cell root_hash = begin_cell().store_uint(receipt_root, 32 * 8).end_cell();
+
+
+        cell path_cell = in_msg_body~load_ref();
+        cell proof = in_msg_body~load_ref();
+        verify_merkle_proof(receipt, root_hash, path_cell, proof);
+
+        cell resend_msg = begin_cell()
+                        .store_uint(op::receipt_confirmed, 32)
+                        .store_uint(query_id, 64)
+                        .store_ref(receipt)
+                        .end_cell();
+
+        var msg = begin_cell()
+                    .store_uint(0x18, 6)
+                    .store_slice(adapter_addr)
+                    .store_coins(9 * gas_consumption())
+                    .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                    .store_ref(resend_msg);
+
+        send_raw_message(msg.end_cell(), 2 + 64); ;; //TODO: may be better mode
+        return();
+    }
+
+    if (op == op::verify_optimistic) {
+        ;; load beacon from msg
+        int next_hash_slice = in_msg_body~load_uint(32 * 8);
+        cell beacon = in_msg_body~load_ref();
+        int beacon_signature = get_beacon_bls_msg(beacon);
+        (slice beacon_structure_slice, int flag) = beacons_dict.udict_get?(32 * 8, next_hash_slice);
+
+        if (flag == 0) {
+            throw(0x1000);
+            return();
+        }
+        cell beacon_next = beacon_structure_slice~load_ref();
+        slice beacon_next_slice = beacon_next.begin_parse();
+        slice beacon_slot = beacon_next_slice~load_ref().begin_parse();
+        slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
+        slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
+        slice beacon_parent_root_data = beacon_parent_root~load_ref().begin_parse();
+        int parent_beacon_key = beacon_parent_root_data~load_uint(32 * 8);
+
+        int is_verified = beacon_structure_slice~load_uint(1);
+        if (is_verified == 0) {
+            throw(1001);
+            return();
+        }
+
+        if (parent_beacon_key == beacon_signature) {
+            cell beacon_struct = begin_cell()
+                .store_uint(1, 1)
+                .store_ref(beacon)
+            .end_cell();
+            beacons_dict~udict_set(32 * 8, beacon_signature, beacon_struct.begin_parse());
+
+            cell beacon_meta_struct = begin_cell()
+                .store_ref(begin_cell().store_uint(0, 16).store_ref(begin_cell().end_cell()).end_cell())
+                .store_ref(begin_cell().store_uint(0, 16).store_ref(begin_cell().end_cell()).end_cell())
+            .end_cell();
+            beacons_meta_dict~udict_set(32 * 8, beacon_signature, beacon_meta_struct.begin_parse());
+
+            if (beacons_dict.dict_empty?()) {
+                throw(0x1111);
+                return();
+            }
+
+            save_data();
+        }
+
+
+        return ();
+    }
+
+    if (op == op::init_beacon) {
+         ;; load beacon from msg
+        cell beacon = in_msg_body~load_ref();
+        int beacon_signature = get_beacon_hash(beacon);
+
+        ;; TODO: check if not empty
+        cell beacon_struct = begin_cell()
+            .store_uint(1, 1)
+            .store_ref(beacon)
+        .end_cell();
+        beacons_dict~udict_set(32 * 8, beacon_signature, beacon_struct.begin_parse());
+
+        cell beacon_meta_struct = begin_cell()
+            .store_ref(
+                begin_cell()
+                .store_uint(0, 16)
+                .store_ref(begin_cell().end_cell())
+                .end_cell()
+            )
+            .store_ref(
+                begin_cell()
+                .store_uint(0, 16)
+                .store_ref(begin_cell().end_cell())
+                .end_cell()
+                )
+        .end_cell();
+        beacons_meta_dict~udict_set(32 * 8, beacon_signature, beacon_meta_struct.begin_parse());
+
+        if (beacons_dict.dict_empty?()) {
+            throw(0x1111);
+            return();
+        }
+
+        save_data();
+        return();
+    }
+
+    throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
+}
+
+
+(int) get_update_validation_status(slice beacon_hash_slice) method_id {
+    load_data();
+    int beacon_hash = beacon_hash_slice~load_uint(32 * 8);
+    slice beacon_structure_slice = get_beacon_structure(beacon_hash);
+    int res = beacon_structure_slice~load_uint(1);
+    return (res);
+}
+
+(int) get_last_filaity_hash() method_id {
+    load_data();
+    return (last_finality_hash);
+}

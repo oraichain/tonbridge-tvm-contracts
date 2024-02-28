@@ -1,0 +1,39 @@
+#include "../imports/stdlib.fc";
+
+(int) get_beacon_hash(cell beacon) impure {
+  slice beacon_ssz = beacon.begin_parse();
+  (slice a, slice ssz_beacon_hash) = beacon_ssz.hashTreeRoot();
+  return ssz_beacon_hash~load_uint(32 * 8);
+}
+
+(slice) get_beacon_body_root(cell beacon_cell) impure {
+  slice beacon_slice = beacon_cell.begin_parse();
+
+  slice beacon_slot = beacon_slice~load_ref().begin_parse();
+  slice beacon_proposer_index = beacon_slot~load_ref().begin_parse();
+  slice beacon_parent_root = beacon_proposer_index~load_ref().begin_parse();
+  slice beacon_parent_root_data = beacon_parent_root~load_ref().begin_parse();
+
+  slice beacon_state_root = beacon_parent_root~load_ref().begin_parse();
+  slice beacon_state_root_data = beacon_state_root~load_ref().begin_parse();
+  slice beacon_body_root = beacon_state_root~load_ref().begin_parse();
+  slice beacon_body_root_data = beacon_body_root~load_ref().begin_parse();
+
+  return beacon_body_root_data;
+}
+
+(int) verify_execution(slice execution_ssz_hash, tuple branch, slice beacon_body_root_data) impure {
+  int execution_branch_length = 4;
+  int index = 9;
+
+  int res = is_valid_merkle_branch(
+    execution_ssz_hash~load_uint(32 * 8),
+    branch,
+    execution_branch_length,
+    index,
+    beacon_body_root_data~load_uint(32 * 8)
+  );
+
+  return res;
+}
+

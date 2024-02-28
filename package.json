@@ -1,28 +1,49 @@
 {
-  "name": "ton-trustless-bridge-tvm-contracts",
-  "version": "0.0.1",
-  "main": "src/index.ts",
-  "license": "MIT",
-  "scripts": {
-    "test": "clear && yarn jest",
-    "script:deploy-bridge": "yarn ts-node scripts/deploy-bridge.ts",
-    "script:send-wrap-bridge": "yarn ts-node scripts/send-wrap-bridge.ts"
-  },
-  "dependencies": {
-    "@ton-community/sandbox": "^0.2.0",
-    "@ton-community/test-utils": "^0.0.2",
-    "@types/jest": "^29.2.5",
-    "@types/node": "^18.14.0",
-    "dotenv": "^16.0.3",
-    "ethers": "^6.0.8",
-    "jest": "^29.3.1",
-    "nacl": "^0.1.3",
-    "ton": "13.3.0",
-    "ton-compiler": "^2.3.0",
-    "ton-core": "^0.45.0",
-    "ton-crypto": "^3.2.0",
-    "ts-jest": "^29.0.5",
-    "ts-node": "^10.9.1",
-    "typescript": "^4.9.4"
-  }
+    "name": "ton-trustless-bridge-tvm-contracts",
+    "version": "0.0.1",
+    "author": "RSquad Blockchain Lab",
+    "license": "GPL-3.0-or-later",
+    "scripts": {
+        "test": "jest",
+        "test:adapter": "jest tests/Adapter.spec.ts",
+        "test:reader": "jest tests/ReaderContract.spec.ts",
+        "test:bls": "jest tests/Bls.spec.ts",
+        "test:ssz": "jest tests/SSZ.spec.ts",
+        "test:bp": "npx blueprint test",
+        "test:light": "jest tests/LightClient.spec.ts",
+        "build": "npx blueprint build",
+        "run": "npx blueprint run",
+        "create": "npx blueprint create AnotherContract",
+        "test:evm": "yarn jest evm-data/*.spec.ts",
+        "script:deploy-bridge": "yarn ts-node scripts/deploy-bridge.ts",
+        "script:send-wrap-bridge": "yarn ts-node scripts/send-wrap-bridge.ts"
+    },
+    "devDependencies": {
+        "@ton-community/blueprint": "^0.12.0",
+        "@ton-community/sandbox": "0.12.0-tvmbeta.1",
+        "@ton-community/test-utils": "^0.3.0",
+        "@types/jest": "^29.5.0",
+        "@types/node": "^20.2.5",
+        "ethereumjs-util": "^7.1.5",
+        "ethers": "^6.0.8",
+        "jest": "^29.5.0",
+        "prettier": "^2.8.6",
+        "ton": "^13.6.1",
+        "ton-core": "^0.51.0",
+        "ton-crypto": "^3.2.0",
+        "ts-jest": "^29.0.5",
+        "ts-node": "^10.9.1",
+        "typescript": "^4.9.5"
+    },
+    "overrides": {
+        "@ton-community/func-js-bin": "0.4.5-tvmbeta.1",
+        "@ton-community/func-js": "0.6.3-tvmbeta.1"
+    },
+    "dependencies": {
+        "@chainsafe/bls": "^7.1.2",
+        "@chainsafe/blst": "^0.2.9",
+        "@chainsafe/ssz": "^0.11.1",
+        "@lodestar/types": "^1.11.1",
+        "@noble/curves": "^1.1.0"
+    }
 }
