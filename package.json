@@ -1,7 +1,8 @@
 {
     "name": "ton-trustless-bridge-tvm-contracts",
     "version": "0.0.1",
-    "license": "MIT",
+    "author": "RSquad Blockchain Lab",
+    "license": "GPL-3.0-or-later",
     "scripts": {
         "test": "jest",
         "test:adapter": "jest tests/Adapter.spec.ts",
