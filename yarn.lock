@@ -4083,10 +4083,10 @@ to-regex-range@^5.0.1:
   dependencies:
     is-number "^7.0.0"
 
-ton-core@^0.51.0:
-  version "0.51.0"
-  resolved "https://registry.yarnpkg.com/ton-core/-/ton-core-0.51.0.tgz#ddc2a240fca0afa9ab9fc3ad035844715cd6a4f4"
-  integrity sha512-FgejId/X1o7nNc5g8DBW1+9piwFolVU3e83Z8TudDCALik29YPhGOqLHSvcVYux3QV7SL0qCNaKgA3mV2nNfCA==
+ton-core@^0.53.0:
+  version "0.53.0"
+  resolved "https://registry.yarnpkg.com/ton-core/-/ton-core-0.53.0.tgz#88ce0c0dbdbb548cd46f1984639c4738b06f38dd"
+  integrity sha512-uO/U1oVLdEliWWbwfNQQK+61C+KM0ehcTdHQ6cN0WSEH2UzGfdVFpC4Wb0ph+wUYe/5njl7TA0uL9nif9Q6qwA==
   dependencies:
     symbol.inspect "1.0.1"
 

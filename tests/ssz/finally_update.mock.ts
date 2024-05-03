@@ -1,6 +1,6 @@
-import {ByteListType, ByteVectorType} from '@chainsafe/ssz';
-import {Cell} from 'ton-core';
-import {bytes} from '../../evm-data/utils';
+import { ByteListType, ByteVectorType } from '@chainsafe/ssz';
+import { Cell } from 'ton-core';
+import { bytes } from '../../evm-data/utils';
 import {
     BYTES_PER_LOGS_BLOOM,
     Bytes20,
@@ -12,7 +12,7 @@ import {
     executionBranch
 } from './finally_update';
 import updateJson from './finally_update.json';
-import {SYNC_COMMITTEE_SIZE, stringToBitArray} from './ssz-beacon-type';
+import { SYNC_COMMITTEE_SIZE, stringToBitArray } from './ssz-beacon-type';
 import {
     BLSSignatureToCell,
     SSZBitVectorToCell,

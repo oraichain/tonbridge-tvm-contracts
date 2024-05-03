@@ -1,8 +1,8 @@
-import {ByteListType, ByteVectorType} from '@chainsafe/ssz';
-import {splitIntoRootChunks} from '@chainsafe/ssz/lib/util/merkleize';
-import {Cell, beginCell} from 'ton-core';
-import {bytes} from '../../evm-data/utils';
-import {Opcodes} from '../../wrappers/SSZ';
+import { ByteListType, ByteVectorType } from '@chainsafe/ssz';
+import { splitIntoRootChunks } from '@chainsafe/ssz/lib/util/merkleize';
+import { Cell, beginCell } from 'ton-core';
+import { bytes } from '../../evm-data/utils';
+import { Opcodes } from '../../wrappers/SSZ';
 import blockJson from './beacon-block.json';
 import {
     BYTES_PER_LOGS_BLOOM,
@@ -20,7 +20,7 @@ import {
     UintBn256,
     stringToBitArray
 } from './ssz-beacon-type';
-import {BLSSignatureToCell, SSZBitVectorToCell, SSZByteVectorTypeToCell, SSZRootToCell, SSZUintToCell} from './ssz-to-cell';
+import { BLSSignatureToCell, SSZBitVectorToCell, SSZByteVectorTypeToCell, SSZRootToCell, SSZUintToCell } from './ssz-to-cell';
 
 interface IBeaconMessage {
     slot: number;

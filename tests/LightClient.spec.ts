@@ -290,18 +290,12 @@ describe('LightClient', () => {
     it('should store beacon', async () => {
         const user = await blockchain.treasury('user');
 
-        const beaconContainerCell = getSSZContainer(
-            SSZUintToCell(
-                { value: +firstUpdateBeacon.slot, size: 8, isInf: true },
-                SSZUintToCell(
-                    { value: +firstUpdateBeacon.proposer_index, size: 8, isInf: false },
-                    SSZRootToCell(
-                        firstUpdateBeacon.parent_root,
-                        SSZRootToCell(firstUpdateBeacon.state_root, SSZRootToCell(firstUpdateBeacon.body_root))
-                    )
-                )
-            )
-        );
+        const beaconContainerCell = SSZRootToCell(firstUpdateBeacon.body_root)
+            .toSSZRoot(firstUpdateBeacon.state_root)
+            .toSSZRoot(firstUpdateBeacon.parent_root)
+            .toSSZUint({ value: +firstUpdateBeacon.proposer_index, size: 8, isInf: false })
+            .toSSZUint({ value: +firstUpdateBeacon.slot, size: 8, isInf: true })
+            .toSSZContainer();
 
         const initResult = await lightClient.sendAddOptimisticUpdate(user.getSender(), {
             value: toNano('15.05'),
@@ -498,18 +492,12 @@ describe('LightClient', () => {
     });
 
     it('should verify and try run receipt', async () => {
-        const beaconContainerCell = getSSZContainer(
-            SSZUintToCell(
-                { value: +testUpdate.slot, size: 8, isInf: true },
-                SSZUintToCell(
-                    { value: +testUpdate.proposerIndex, size: 8, isInf: false },
-                    SSZRootToCell(
-                        testUpdate.parentRoot,
-                        SSZRootToCell(testUpdate.stateRoot, SSZRootToCell(testUpdate.bodyRoot))
-                    )
-                )
-            )
-        );
+        const beaconContainerCell = SSZRootToCell(testUpdate.bodyRoot)
+            .toSSZRoot(testUpdate.stateRoot)
+            .toSSZRoot(testUpdate.parentRoot)
+            .toSSZUint({ value: +testUpdate.proposerIndex, size: 8, isInf: false })
+            .toSSZUint({ value: +testUpdate.slot, size: 8, isInf: true })
+            .toSSZContainer();
 
         const executionCell = getExecutionContainerCell2(execution);
         let execution_branch_cell!: Cell;
@@ -734,7 +722,7 @@ describe('LightClient', () => {
         });
     });
 
-    it('should verify optimistic updata', async () => {
+    it('should verify optimistic update', async () => {
         blockchain = await Blockchain.create();
 
         lightClient = blockchain.openContract(LightClient.createFromConfig({}, code));
@@ -757,21 +745,12 @@ describe('LightClient', () => {
             committee: committeeToCell(t1initialCommittee),
         });
 
-        const beaconContainerCell = getSSZContainer(
-            SSZUintToCell(
-                { value: +t1firstUpdateBeacon.slot, size: 8, isInf: true },
-                SSZUintToCell(
-                    { value: +t1firstUpdateBeacon.proposerIndex, size: 8, isInf: false },
-                    SSZRootToCell(
-                        '0x' + t1firstUpdateBeacon.parentRoot,
-                        SSZRootToCell(
-                            '0x' + t1firstUpdateBeacon.stateRoot,
-                            SSZRootToCell('0x' + t1firstUpdateBeacon.bodyRoot)
-                        )
-                    )
-                )
-            )
-        );
+        const beaconContainerCell = SSZRootToCell('0x' + t1firstUpdateBeacon.bodyRoot)
+            .toSSZRoot('0x' + t1firstUpdateBeacon.stateRoot)
+            .toSSZRoot('0x' + t1firstUpdateBeacon.parentRoot)
+            .toSSZUint({ value: +t1firstUpdateBeacon.proposerIndex, size: 8, isInf: false })
+            .toSSZUint({ value: +t1firstUpdateBeacon.slot, size: 8, isInf: true })
+            .toSSZContainer();
 
         const initResult2 = await lightClient.sendAddOptimisticUpdate(user.getSender(), {
             value: toNano('15.05'),
@@ -797,18 +776,11 @@ describe('LightClient', () => {
             selfHash: '0xf15f8da67b5fe0660319c05ebc9cc85cfc92de41f6bebf778bf661817f6da5fb',
         };
 
-        const beaconContainerCell = getSSZContainer(
-            SSZUintToCell(
-                { value: +secondUpdateBeacon.slot, size: 8, isInf: true },
-                SSZUintToCell(
-                    { value: +secondUpdateBeacon.proposerIndex, size: 8, isInf: false },
-                    SSZRootToCell(
-                        secondUpdateBeacon.parentRoot,
-                        SSZRootToCell(secondUpdateBeacon.stateRoot, SSZRootToCell(secondUpdateBeacon.bodyRoot))
-                    )
-                )
-            )
-        );
+        const beaconContainerCell = SSZRootToCell(secondUpdateBeacon.bodyRoot)
+            .toSSZRoot(secondUpdateBeacon.parentRoot)
+            .toSSZUint({ value: +secondUpdateBeacon.proposerIndex, size: 8, isInf: false })
+            .toSSZUint({ value: +secondUpdateBeacon.slot, size: 8, isInf: true })
+            .toSSZContainer();
 
         // console.log(beaconContainerCell);
 
@@ -854,31 +826,19 @@ describe('LightClient', () => {
             ParentBeaconId: 364,
         };
 
-        const beaconContainerCell = getSSZContainer(
-            SSZUintToCell(
-                { value: +secondUpdateBeacon.slot, size: 8, isInf: true },
-                SSZUintToCell(
-                    { value: +secondUpdateBeacon.proposerIndex, size: 8, isInf: false },
-                    SSZRootToCell(
-                        secondUpdateBeacon.parentRoot,
-                        SSZRootToCell(secondUpdateBeacon.stateRoot, SSZRootToCell(secondUpdateBeacon.bodyRoot))
-                    )
-                )
-            )
-        );
+        const beaconContainerCell = SSZRootToCell(secondUpdateBeacon.bodyRoot)
+            .toSSZRoot(secondUpdateBeacon.stateRoot)
+            .toSSZRoot(secondUpdateBeacon.parentRoot)
+            .toSSZUint({ value: +secondUpdateBeacon.proposerIndex, size: 8, isInf: false })
+            .toSSZUint({ value: +secondUpdateBeacon.slot, size: 8, isInf: true })
+            .toSSZContainer();
 
-        const beaconFirstContainerCell = getSSZContainer(
-            SSZUintToCell(
-                { value: +firstUpdateBeacon.slot, size: 8, isInf: true },
-                SSZUintToCell(
-                    { value: +firstUpdateBeacon.proposerIndex, size: 8, isInf: false },
-                    SSZRootToCell(
-                        firstUpdateBeacon.parentRoot,
-                        SSZRootToCell(firstUpdateBeacon.stateRoot, SSZRootToCell(firstUpdateBeacon.bodyRoot))
-                    )
-                )
-            )
-        );
+        const beaconFirstContainerCell = SSZRootToCell(firstUpdateBeacon.bodyRoot)
+            .toSSZRoot(firstUpdateBeacon.stateRoot)
+            .toSSZRoot(firstUpdateBeacon.parentRoot)
+            .toSSZUint({ value: +firstUpdateBeacon.proposerIndex, size: 8, isInf: false })
+            .toSSZUint({ value: +firstUpdateBeacon.slot, size: 8, isInf: true })
+            .toSSZContainer();
 
         // console.log(beaconContainerCell);
 
@@ -890,17 +850,14 @@ describe('LightClient', () => {
         const result = await lightClient.sendVerifyOptimisticUpdate(user.getSender(), {
             value: toNano('0.07'),
             beacon: beaconFirstContainerCell,
-            nextHash: secondUpdateBeacon.selfHash
+            nextHash: secondUpdateBeacon.selfHash,
         });
-
-
 
         expect(initResult.transactions).toHaveTransaction({
             from: user.address,
             to: lightClient.address,
             success: true,
         });
-
 
         expect(result.transactions).toHaveTransaction({
             from: user.address,

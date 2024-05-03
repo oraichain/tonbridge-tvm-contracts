@@ -1,5 +1,5 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, toNano } from 'ton-core';
-import { TupleItemSlice } from 'ton-core/dist/tuple/tuple';
+import {Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode} from 'ton-core';
+import {TupleItemSlice} from 'ton-core/dist/tuple/tuple';
 
 export type JettonMinterConfig = {
     adminAddress: Address;
@@ -37,7 +37,7 @@ export class JettonMinter implements Contract {
         });
     }
 
-    async sendMint(provider: ContractProvider, via: Sender, 
+    async sendMint(provider: ContractProvider, via: Sender,
         opts: {
             toAddress: Address;
             jettonAmount: bigint;
@@ -84,5 +84,5 @@ export class JettonMinter implements Contract {
         const result = await provider.get('get_jetton_data', []);
         return result.stack.readBigNumber();
     }
-  
+
 }

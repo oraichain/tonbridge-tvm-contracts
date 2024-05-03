@@ -2,6 +2,8 @@ import {splitIntoRootChunks} from '@chainsafe/ssz/lib/util/merkleize';
 import {Cell, beginCell} from 'ton-core';
 import {BLSSignature, Root} from './ssz-beacon-type';
 
+
+
 export const Opcodes = {
   run_ssz: 0x86f1bcc5,
   run_verify_receipt: 0x44b4412c,
@@ -32,7 +34,7 @@ export function getSSZContainer(body: Cell, tail?: Cell) {
 }
 
 
-export function SSZUintToCell({value, size, isInf = false}: {value: number; size: number; isInf?: boolean}, tail?: Cell) {
+export function SSZUintToCell({value, size, isInf = false}: SSZUintValue, tail?: Cell) {
   let builder = beginCell()
       .storeUint(Opcodes.type__uint, 32)
       .storeBit(isInf)
@@ -81,6 +83,22 @@ export function BLSSignatureToCell(value: string, tail?: Cell) {
 
 export function SSZRootToCell(value: string, tail?: Cell) {
   return SSZByteVectorTypeToCell(value, 32, Root.maxChunkCount, tail);
+}
+
+Cell.prototype.toBLSSignature = function (value:string) {
+  return BLSSignatureToCell(value, this);
+}
+
+Cell.prototype.toSSZRoot = function (value:string) {
+  return SSZRootToCell(value, this);
+}
+
+Cell.prototype.toSSZUint =  function (value:SSZUintValue) {
+  return SSZUintToCell(value, this);
+}
+
+Cell.prototype.toSSZContainer=  function () {
+  return getSSZContainer(this);
 }
 
 export function SSZByteVectorTypeToCell(value: string, size: number, maxChunks: number, tail?: Cell) {

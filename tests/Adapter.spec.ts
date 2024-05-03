@@ -2,7 +2,7 @@ import {compile} from '@ton-community/blueprint';
 import {Blockchain, SandboxContract, TreasuryContract} from '@ton-community/sandbox';
 import '@ton-community/test-utils';
 import {ethers} from 'ethers';
-import {Cell, Dictionary, ExternalAddress, address, beginCell, loadTransaction, toNano} from 'ton-core';
+import {Cell, Dictionary, address, beginCell, loadTransaction, toNano} from 'ton-core';
 import {sha256} from 'ton-crypto';
 import {IReceiptJSON, Receipt} from '../evm-data/receipt';
 import {Adapter} from '../wrappers/Adapter';
@@ -111,13 +111,13 @@ describe('Adapter', () => {
 
         //  0xC7296D50dDB12de4d2Cd8C889A73B98538624f61
 
-        const r2 = Receipt.fromJSON(JSON.parse(burnRec) as unknown as IReceiptJSON);
+        const r2 = Receipt.fromJSON(JSON.parse(burnRec) as IReceiptJSON);
         const cell2 = r2.toCell();
         // console.log(cell2);
 
 
         const dataArr = jsonReceipt.logs.filter((l) => l.topics.includes(originalTopicId)).map((l) => l.data);
-        const r = Receipt.fromJSON(JSON.parse(receipt) as unknown as IReceiptJSON);
+        const r = Receipt.fromJSON(JSON.parse(receipt) as IReceiptJSON);
         const cell = r.toCell();
 
 
@@ -206,35 +206,35 @@ describe('Adapter', () => {
 
         console.log(burnRes.transactions);
 
-        return;
+        // return;
 
-        expectSuccess(burnRes.transactions, user.address, jettonWalletUser.address);
-        expectSuccess(burnRes.transactions, jettonWalletUser.address, jettonWalletAdapter.address);
-        expectSuccess(burnRes.transactions, jettonWalletAdapter.address, adapter.address);
-        expectSuccess(burnRes.transactions, adapter.address, jettonWalletAdapter.address);
-        expectSuccess(burnRes.transactions, jettonWalletAdapter.address, jettonMinter.address);
-        expectSuccess(burnRes.transactions, jettonMinter.address, user.address);
-
-
-
-        expect(
-            burnRes.transactions
-                .filter((t) => t.externals.length > 0)
-                .map((t) =>
-                    t.outMessages
-                        .values()
-                        .filter((m) => m.info.dest instanceof ExternalAddress)
-                        .map((m) => m.info.dest?.toString())
-                )
-        ).toStrictEqual([['External<256:2>']]); // log::burn = 2;
+        // expectSuccess(burnRes.transactions, user.address, jettonWalletUser.address);
+        // expectSuccess(burnRes.transactions, jettonWalletUser.address, jettonWalletAdapter.address);
+        // expectSuccess(burnRes.transactions, jettonWalletAdapter.address, adapter.address);
+        // expectSuccess(burnRes.transactions, adapter.address, jettonWalletAdapter.address);
+        // expectSuccess(burnRes.transactions, jettonWalletAdapter.address, jettonMinter.address);
+        // expectSuccess(burnRes.transactions, jettonMinter.address, user.address);
 
 
 
-        const walletBalanceBurned = await jettonWalletUser.getBalance();
-        expect(walletBalanceBurned.amount).toBe(BigInt(dataArr[0]) - burningAmount);
+        // expect(
+        //     burnRes.transactions
+        //         .filter((t) => t.externals.length > 0)
+        //         .map((t) =>
+        //             t.outMessages
+        //                 .values()
+        //                 .filter((m) => m.info.dest instanceof ExternalAddress)
+        //                 .map((m) => m.info.dest?.toString())
+        //         )
+        // ).toStrictEqual([['External<256:2>']]); // log::burn = 2;
 
-        const expectedSupply = await jettonMinter.getTotalsupply();
-        expect(expectedSupply).toBe(initialSupply - burningAmount);
+
+
+        // const walletBalanceBurned = await jettonWalletUser.getBalance();
+        // expect(walletBalanceBurned.amount).toBe(BigInt(dataArr[0]) - burningAmount);
+
+        // const expectedSupply = await jettonMinter.getTotalsupply();
+        // expect(expectedSupply).toBe(initialSupply - burningAmount);
     });
 
     it('should throw MSG_VALUE_TOO_SMALL if msg.value less that amount + 0.2 TON', async () => {
