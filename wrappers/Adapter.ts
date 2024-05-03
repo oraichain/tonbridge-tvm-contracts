@@ -1,5 +1,5 @@
 import {Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode} from 'ton-core';
-import {bytes32} from '../evm-data/utils';
+import {bytes32, crc32} from '../evm-data/utils';
 
 export type AdapterConfig = {
     topic_mint_id?: string;
@@ -9,10 +9,10 @@ export type AdapterConfig = {
 };
 
 export enum BridgeOpCodes {
-    WRAP = 0xf0a28992,
-    SEND_RECEIPT = 0x85d0c32b,
-    CONFIRM_RECEIPT = 0xe4c557c2,
-    SET_JMINTER = 0x3bceecc4,
+    WRAP =  0xf0a28992,
+    SEND_RECEIPT = crc32('send_receipt'),
+    CONFIRM_RECEIPT = crc32('receipt_confirmed'),
+    SET_JMINTER = crc32('set_jminter'),
 }
 
 export function adapterConfigToCell(config: AdapterConfig): Cell {

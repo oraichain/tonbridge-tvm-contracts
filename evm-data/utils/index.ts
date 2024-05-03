@@ -160,3 +160,5 @@ export const address = val => toBuffer(val, 20)
 /** converts it to a Buffer with a variable length. 0 = length 0*/
 // @ts-ignore
 export const uint = val => toBuffer(val, 0)
+
+export * from './crc32';
