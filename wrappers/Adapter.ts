@@ -1,5 +1,6 @@
 import {Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode} from 'ton-core';
-import {bytes32, crc32} from '../evm-data/utils';
+import {crc32} from '../crc32';
+import {bytes32} from '../evm-data/utils';
 
 export type AdapterConfig = {
     topic_mint_id?: string;

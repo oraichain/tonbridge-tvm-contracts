@@ -161,4 +161,4 @@ export const address = val => toBuffer(val, 20)
 // @ts-ignore
 export const uint = val => toBuffer(val, 0)
 
-export * from './crc32';
+

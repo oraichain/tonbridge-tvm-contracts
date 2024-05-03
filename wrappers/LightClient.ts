@@ -10,6 +10,7 @@ import {
     SendMode,
     TupleItemSlice,
 } from 'ton-core';
+import {crc32} from '../crc32';
 
 export type LightClientConfig = {
     // adapterAddr?: Address;
@@ -48,18 +49,18 @@ export function lightClientConfigToCell(config: LightClientConfig): Cell {
 }
 
 export const Opcodes = {
-    init_committee: 0xed62943d,
-    add_optimistic_update: 0x70a8758c,
-    add_execution: 0xc52dcbd0,
-    add_next_sync_committee: 0x1440cfc,
-    add_finally_update: 0x57ef7473,
-    verifyProof: 0xf128d647,
-    calc_aggr_pubkey: 0x6189d5cd,
-    calc_committee_hash: 0xa103a392,
-    verify_committee: 0xad76635c,
-    verify_optimistic: 0xb5507839,
-    aggregate_pubkey: 0x58198c64,
-    init_beacon: 0x17fd941d,
+    init_committee: crc32('op::init_committee'),
+    add_optimistic_update: crc32('op::add_optimistic_update'),
+    add_execution: crc32('op::add_execution'),
+    add_next_sync_committee: crc32('op::add_next_sync_committee'),
+    add_finally_update: crc32('op::add_finally_update'),
+    verifyProof: crc32('verify_receipt'),
+    calc_aggr_pubkey: crc32('beacons_meta_slice'),
+    calc_committee_hash: crc32('calc_committee_hash'),
+    verify_committee: crc32('verify_committee'),
+    verify_optimistic: crc32('verify_optimistic'),
+    aggregate_pubkey: crc32('aggregate_pubkey'),
+    init_beacon: crc32('init_beacon'),
 };
 
 export class LightClient implements Contract {
