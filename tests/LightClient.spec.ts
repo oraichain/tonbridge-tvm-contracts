@@ -346,6 +346,9 @@ describe('LightClient', () => {
             to: lightClient.address,
             success: false,
         });
+
+
+        console.log(initResult.transactions.flatMap(c=>c.blockchainLogs));
     });
 
     it('should store next sync committee', async () => {
@@ -412,6 +415,7 @@ describe('LightClient', () => {
             to: lightClient.address,
             success: false,
         });
+
 
         // for (let i = 0; i < 16; i++) {
         //     const initResult = results[i];
