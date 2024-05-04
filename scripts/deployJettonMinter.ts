@@ -1,8 +1,8 @@
-import { NetworkProvider, compile } from '@ton-community/blueprint';
-import { Address, Dictionary, beginCell, toNano } from 'ton-core';
-import { sha256 } from 'ton-crypto';
-import { Adapter } from '../wrappers/Adapter';
-import { JettonMinter } from '../wrappers/JettonMinter';
+import {NetworkProvider, compile} from '@ton-community/blueprint';
+import {Address, Dictionary, beginCell, toNano} from 'ton-core';
+import {sha256} from 'ton-crypto';
+import {Adapter} from '../wrappers/Adapter';
+import {JettonMinter} from '../wrappers/JettonMinter';
 
 const adapter_addr = Address.parse('EQBXGmE4yMbdaljWGMfiYkAvOm3YpmY4WAOzFoK3L01iaMXp');
 
@@ -40,5 +40,6 @@ export async function run(provider: NetworkProvider) {
         jminterAddr: jettonMinter.address,
     })
 
+    console.log("Adapter:", adapter.address, "Jetton minter: ", jettonMinter.address)
     // run methods on `jettonMinter`
 }

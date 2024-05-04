@@ -1,6 +1,6 @@
-import { NetworkProvider, compile } from '@ton-community/blueprint';
-import { toNano } from 'ton-core';
-import { LightClient } from '../wrappers/LightClient';
+import {NetworkProvider, compile} from '@ton-community/blueprint';
+import {toNano} from 'ton-core';
+import {LightClient} from '../wrappers/LightClient';
 
 export async function run(provider: NetworkProvider) {
     const lightClient = provider.open(LightClient.createFromConfig({}, await compile('LightClient')));
