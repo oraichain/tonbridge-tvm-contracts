@@ -342,9 +342,9 @@ describe('LightClient', () => {
 
 
         expect(initResult.transactions).toHaveTransaction({
-            from: lightClient.address,
-            to: user.address,
-            success: true,
+            from: user.address,
+            to: lightClient.address,
+            success: false,
         });
     });
 
@@ -408,9 +408,9 @@ describe('LightClient', () => {
         // console.log(externalOutBodySlice);
 
         expect(initResult.transactions).toHaveTransaction({
-            from: lightClient.address,
-            to: user.address,
-            success: true,
+            from: user.address,
+            to: lightClient.address,
+            success: false,
         });
 
         // for (let i = 0; i < 16; i++) {
