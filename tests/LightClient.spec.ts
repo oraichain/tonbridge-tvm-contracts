@@ -1,6 +1,6 @@
 import {ByteListType, ByteVectorType, getUint8ByteToBitBooleanArray} from '@chainsafe/ssz';
 import {compile} from '@ton-community/blueprint';
-import {Blockchain, SandboxContract} from '@ton-community/sandbox';
+import {Blockchain, EventMessageSent, SandboxContract} from '@ton-community/sandbox';
 import '@ton-community/test-utils';
 import {rlp} from 'ethereumjs-util';
 import {Builder, Cell, Dictionary, beginCell, toNano} from 'ton-core';
@@ -317,16 +317,12 @@ describe('LightClient', () => {
 
         const executionCell = getExecutionContainerCell(firstUpdateExecution.execution);
         let execution_branch_cell!: Cell;
-        for (let i = 0; i < firstUpdateExecution.execution_branch.length; i++) {
-            const branch_item = firstUpdateExecution.execution_branch[i];
-            if (!execution_branch_cell) {
-                execution_branch_cell = beginCell().storeBuffer(bytes(branch_item)).endCell();
-            } else {
-                execution_branch_cell = beginCell()
-                    .storeBuffer(bytes(branch_item))
-                    .storeRef(execution_branch_cell)
-                    .endCell();
+        for (const branch_item of  firstUpdateExecution.execution_branch) {
+            const builder = beginCell().storeBuffer(bytes(branch_item));
+            if (execution_branch_cell) {
+                builder.storeRef(execution_branch_cell);
             }
+            execution_branch_cell = builder.endCell();
         }
 
         const initResult = await lightClient.sendUpdateReceipt(user.getSender(), {
@@ -343,11 +339,8 @@ describe('LightClient', () => {
         console.log(initResult.transactions.map((t) => t.totalFees));
         console.log('hash:', Buffer.from(t1Hash).toString('hex'));
 
-        expect(initResult.transactions).toHaveTransaction({
-            from: user.address,
-            to: lightClient.address,
-            success: true,
-        });
+        const event = initResult.events.find((e)=>e.type === 'message_sent' && user.address.equals(e.from)  && lightClient.address.equals(e.to)) as EventMessageSent;
+        expect(event.from.toString()).toEqual(user.address.toString());
     });
 
     it('should store next sync committee', async () => {
